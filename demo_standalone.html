@@ -879,6 +879,22 @@
         }
       }
 
+      // Download location_data JSON
+      function handleDownloadData(e) {
+        if (dataset) {
+          if (e) e.preventDefault();
+          const blob = new Blob([JSON.stringify(dataset, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'location_data.json';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
+      }
+
       // Copy Consignment Airway Bill Manifest
       function copyWaybillText() {
         if (!pickupResult || !deliveryResult) return;
@@ -988,8 +1004,20 @@ Tracking Number: NC-2026-${pHub?.code || 'ORIG'}-${dHub?.code || 'DEST'}-${Math.
                 </div>
               </div>
 
-              {/* Tab Selector */}
-              <div className="flex items-center space-x-2 bg-slate-800 p-1 rounded-xl border border-slate-700/80">
+              {/* Top Navbar Actions */}
+              <div className="flex items-center space-x-2">
+                <a
+                  href="./location_data.json"
+                  download="location_data.json"
+                  onClick={handleDownloadData}
+                  className="flex items-center space-x-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-emerald-600/30 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/40 transition shadow-2xs"
+                  title="Download complete location_data.json (33,894 records)"
+                >
+                  <span>📥 Download location_data</span>
+                </a>
+
+                {/* Tab Selector */}
+                <div className="flex items-center space-x-1 bg-slate-800 p-1 rounded-xl border border-slate-700/80">
                 <button
                   onClick={() => setActiveTab('router')}
                   className={`text-xs font-bold px-3.5 py-1.5 rounded-lg transition ${
@@ -1008,6 +1036,7 @@ Tracking Number: NC-2026-${pHub?.code || 'ORIG'}-${dHub?.code || 'DEST'}-${Math.
                 </button>
               </div>
             </div>
+                        </div>
           </header>
 
           {/* Main Content Area */}
@@ -1031,14 +1060,26 @@ Tracking Number: NC-2026-${pHub?.code || 'ORIG'}-${dHub?.code || 'DEST'}-${Math.
                       </h2>
                     </div>
 
-                    <button
-                      onClick={copyWaybillText}
-                      className={`shrink-0 font-bold text-xs px-4 py-2.5 rounded-xl transition shadow-md flex items-center space-x-2 ${
-                        copiedWaybill ? 'bg-emerald-500 text-white' : 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                      }`}
-                    >
-                      <span>{copiedWaybill ? '✓ Manifest & Airway Bill Copied!' : '📄 Copy Airway Bill / Manifest'}</span>
-                    </button>
+                    <div className="flex items-center flex-wrap gap-2">
+                      <a
+                        href="./location_data.json"
+                        download="location_data.json"
+                        onClick={handleDownloadData}
+                        className="shrink-0 font-bold text-xs px-4 py-2.5 rounded-xl transition shadow-md flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 hover:border-emerald-400"
+                        title="Download full location_data.json (33,894 indexed entities)"
+                      >
+                        <span>📥 Download location_data</span>
+                      </a>
+
+                      <button
+                        onClick={copyWaybillText}
+                        className={`shrink-0 font-bold text-xs px-4 py-2.5 rounded-xl transition shadow-md flex items-center space-x-2 ${
+                          copiedWaybill ? 'bg-emerald-500 text-white' : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                        }`}
+                      >
+                        <span>{copiedWaybill ? '✓ Manifest Copied!' : '📄 Copy Airway Bill'}</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Administrative & Geographic Hierarchy Metadata Bar */}

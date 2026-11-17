@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function HierarchyMetadata({ onCopyWaybill, copiedWaybill }) {
+export default function HierarchyMetadata({ onCopyWaybill, copiedWaybill, onDownloadData }) {
   return (
     <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-teal-950 text-white rounded-3xl p-5 md:p-6 shadow-xl border border-emerald-500/30">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
@@ -16,14 +16,28 @@ export default function HierarchyMetadata({ onCopyWaybill, copiedWaybill }) {
           </h2>
         </div>
 
-        <button
-          onClick={onCopyWaybill}
-          className={`shrink-0 font-bold text-xs px-4 py-2.5 rounded-xl transition shadow-md flex items-center space-x-2 ${
-            copiedWaybill ? 'bg-emerald-500 text-white' : 'bg-emerald-600 hover:bg-emerald-500 text-white'
-          }`}
-        >
-          <span>{copiedWaybill ? '✓ Manifest & Airway Bill Copied!' : '📄 Copy Airway Bill / Manifest'}</span>
-        </button>
+        <div className="flex items-center flex-wrap gap-2">
+          {/* Download location_data Button */}
+          <a
+            href="./location_data.json"
+            download="location_data.json"
+            onClick={onDownloadData}
+            className="shrink-0 font-bold text-xs px-4 py-2.5 rounded-xl transition shadow-md flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 hover:border-emerald-400"
+            title="Download full location_data.json (33,894 indexed entities)"
+          >
+            <span>📥 Download location_data</span>
+          </a>
+
+          {/* Copy Manifest Button */}
+          <button
+            onClick={onCopyWaybill}
+            className={`shrink-0 font-bold text-xs px-4 py-2.5 rounded-xl transition shadow-md flex items-center space-x-2 ${
+              copiedWaybill ? 'bg-emerald-500 text-white' : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+            }`}
+          >
+            <span>{copiedWaybill ? '✓ Manifest Copied!' : '📄 Copy Airway Bill'}</span>
+          </button>
+        </div>
       </div>
 
       {/* Administrative & Geographic Hierarchy Metadata Bar */}

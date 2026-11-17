@@ -358,6 +358,22 @@ export default function App() {
   const totalConsignmentFee = baseCharge + weightSurcharge + pickupSurcharge + deliverySurcharge + codFee;
   const netMerchantPayout = Math.max(0, (codAmount || 0) - totalConsignmentFee);
 
+  // Download location_data JSON
+  const handleDownloadData = (e) => {
+    if (dataset) {
+      e.preventDefault();
+      const blob = new Blob([JSON.stringify(dataset, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'location_data.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  };
+
   // Copy Airway Bill Manifest text
   const copyWaybillText = () => {
     const pHub = pickupResult?.hubAssign?.hub;
@@ -413,12 +429,12 @@ Distance: ${totalDist} km | Weight: ${pkgWeight} kg | COD: ৳${codAmount}
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-100 text-slate-800">
-      <Header activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Header activeTab={activeTab} setActiveTab={setActiveTab} onDownloadData={handleDownloadData} />
 
       <main className="max-w-7xl mx-auto w-full p-4 md:p-6 space-y-6 flex-1">
         {activeTab === 'router' ? (
           <div className="space-y-6">
-            <HierarchyMetadata onCopyWaybill={copyWaybillText} copiedWaybill={copiedWaybill} />
+            <HierarchyMetadata onCopyWaybill={copyWaybillText} copiedWaybill={copiedWaybill} onDownloadData={handleDownloadData} />
             <ScenarioBar onSelectScenario={applyScenario} />
 
             {/* TWO-COLUMN CARDS: PICKUP vs DELIVERY */}
