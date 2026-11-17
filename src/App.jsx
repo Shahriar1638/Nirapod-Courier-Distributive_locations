@@ -3,7 +3,6 @@ import Header from './components/Header.jsx';
 import HierarchyMetadata from './components/HierarchyMetadata.jsx';
 import ScenarioBar from './components/ScenarioBar.jsx';
 import HierarchyForm from './components/HierarchyForm.jsx';
-import TransitManifest from './components/TransitManifest.jsx';
 import HubDirectory from './components/HubDirectory.jsx';
 import SingleCoordinateInspector from './components/SingleCoordinateInspector.jsx';
 
@@ -481,31 +480,6 @@ Distance: ${totalDist} km | Weight: ${pkgWeight} kg | COD: ৳${codAmount}
                 onSyncFromCoords={() => syncHierarchyFromCoords(false)}
               />
             </div>
-
-            <TransitManifest
-              pickupResult={pickupResult}
-              deliveryResult={deliveryResult}
-              pickupHierarchy={pickupHierarchy}
-              deliveryHierarchy={deliveryHierarchy}
-              totalDist={totalDist}
-              pickupIsOut={pickupIsOut}
-              deliveryIsOut={deliveryIsOut}
-              pkgWeight={pkgWeight}
-              setPkgWeight={setPkgWeight}
-              deliverySpeed={deliverySpeed}
-              setDeliverySpeed={setDeliverySpeed}
-              codAmount={codAmount}
-              setCodAmount={setCodAmount}
-              baseCharge={baseCharge}
-              weightSurcharge={weightSurcharge}
-              pickupSurcharge={pickupSurcharge}
-              deliverySurcharge={deliverySurcharge}
-              codFee={codFee}
-              totalConsignmentFee={totalConsignmentFee}
-              netMerchantPayout={netMerchantPayout}
-              onCopyWaybill={copyWaybillText}
-              copiedWaybill={copiedWaybill}
-            />
 
             <HubDirectory />
           </div>
