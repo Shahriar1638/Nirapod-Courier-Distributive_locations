@@ -192,6 +192,36 @@ export default function App() {
     }
   };
 
+  // Re-anchor coordinates from hierarchy selection to find nearest hub
+  const syncCoordsFromHierarchy = (isPickup) => {
+    if (!dataset) return;
+    const hier = isPickup ? pickupHierarchy : deliveryHierarchy;
+    let target = null;
+    
+    if (hier.subArea) {
+      target = dataset.osm_places?.find(p => p.nameEn?.toLowerCase() === hier.subArea.toLowerCase());
+    }
+    if (!target && hier.area) {
+      target = dataset.osm_places?.find(p => p.nameEn?.toLowerCase() === hier.area.toLowerCase());
+    }
+    if (!target && hier.thana) {
+      target = dataset.postcodes?.find(p => p.thana && p.thana.toLowerCase() === hier.thana.toLowerCase());
+    }
+    if (!target && hier.upazila) {
+      target = dataset.upazilas?.find(u => u.name?.toLowerCase() === hier.upazila.toLowerCase());
+    }
+
+    if (target) {
+      if (isPickup) {
+        setPickupLat(Number(target.lat).toFixed(5));
+        setPickupLon(Number(target.lon).toFixed(5));
+      } else {
+        setDeliveryLat(Number(target.lat).toFixed(5));
+        setDeliveryLon(Number(target.lon).toFixed(5));
+      }
+    }
+  };
+
   // Update Pickup Routing
   useEffect(() => {
     if (!dataset) return;
@@ -457,6 +487,7 @@ Distance: ${totalDist} km | Weight: ${pkgWeight} kg | COD: ৳${codAmount}
                 getAvailableAreas={getAvailableAreas}
                 getAvailableSubAreas={getAvailableSubAreas}
                 onSyncFromCoords={() => syncHierarchyFromCoords(true)}
+                onFindNearestHub={() => syncCoordsFromHierarchy(true)}
               />
 
               <HierarchyForm
@@ -478,6 +509,7 @@ Distance: ${totalDist} km | Weight: ${pkgWeight} kg | COD: ৳${codAmount}
                 getAvailableAreas={getAvailableAreas}
                 getAvailableSubAreas={getAvailableSubAreas}
                 onSyncFromCoords={() => syncHierarchyFromCoords(false)}
+                onFindNearestHub={() => syncCoordsFromHierarchy(false)}
               />
             </div>
 

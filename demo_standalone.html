@@ -30,6 +30,43 @@
       background: #cbd5e1;
       border-radius: 4px;
     }
+  
+    @keyframes glowPulse {
+      0%, 100% {
+        box-shadow: 0 0 14px rgba(16, 185, 129, 0.65), 0 0 28px rgba(16, 185, 129, 0.35);
+        transform: scale(1);
+      }
+      50% {
+        box-shadow: 0 0 24px rgba(16, 185, 129, 0.95), 0 0 45px rgba(52, 211, 153, 0.7);
+        transform: scale(1.018);
+      }
+    }
+    .glow-btn {
+      animation: glowPulse 2s infinite ease-in-out;
+    }
+    .glow-btn:hover {
+      box-shadow: 0 0 35px rgba(16, 185, 129, 1), 0 0 60px rgba(52, 211, 153, 0.85);
+      transform: scale(1.025);
+    }
+
+    @keyframes glowPulseSky {
+      0%, 100% {
+        box-shadow: 0 0 14px rgba(14, 165, 233, 0.65), 0 0 28px rgba(14, 165, 233, 0.35);
+        transform: scale(1);
+      }
+      50% {
+        box-shadow: 0 0 24px rgba(14, 165, 233, 0.95), 0 0 45px rgba(56, 189, 248, 0.7);
+        transform: scale(1.018);
+      }
+    }
+    .glow-btn-sky {
+      animation: glowPulseSky 2s infinite ease-in-out;
+    }
+    .glow-btn-sky:hover {
+      box-shadow: 0 0 35px rgba(14, 165, 233, 1), 0 0 60px rgba(56, 189, 248, 0.85);
+      transform: scale(1.025);
+    }
+
   </style>
 </head>
 <body class="bg-slate-100 text-slate-800 antialiased min-h-screen flex flex-col">
@@ -1507,13 +1544,15 @@ Tracking Number: NC-2026-${pHub?.code || 'ORIG'}-${dHub?.code || 'DEST'}-${Math.
 
                       </div>
 
-                      <div className="flex justify-end pt-1">
+                      <div className="pt-2">
                         <button
                           type="button"
                           onClick={() => syncCoordsFromHierarchy(true)}
-                          className="text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-2.5 py-1 rounded-lg border border-slate-300 flex items-center gap-1"
+                          className="w-full py-2.5 px-4 rounded-2xl font-black text-xs text-white bg-gradient-to-r from-emerald-600 via-teal-500 to-emerald-600 hover:from-emerald-500 hover:to-teal-400 border border-emerald-400/70 flex items-center justify-center space-x-2 transition-all transform active:scale-95 glow-btn uppercase tracking-wider cursor-pointer shadow-lg"
                         >
-                          <span>🧭 Sync GPS from Address</span>
+                          <span className="text-sm">🎯</span>
+                          <span>Find Nearest Hub</span>
+                          <span className="inline-block w-2 h-2 rounded-full bg-white animate-ping ml-1"></span>
                         </button>
                       </div>
                     </div>
@@ -1931,13 +1970,15 @@ Tracking Number: NC-2026-${pHub?.code || 'ORIG'}-${dHub?.code || 'DEST'}-${Math.
 
                       </div>
 
-                      <div className="flex justify-end pt-1">
+                      <div className="pt-2">
                         <button
                           type="button"
                           onClick={() => syncCoordsFromHierarchy(false)}
-                          className="text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-2.5 py-1 rounded-lg border border-slate-300 flex items-center gap-1"
+                          className="w-full py-2.5 px-4 rounded-2xl font-black text-xs text-white bg-gradient-to-r from-sky-600 via-teal-500 to-sky-600 hover:from-sky-500 hover:to-teal-400 border border-sky-400/70 flex items-center justify-center space-x-2 transition-all transform active:scale-95 glow-btn-sky uppercase tracking-wider cursor-pointer shadow-lg"
                         >
-                          <span>🧭 Sync GPS from Address</span>
+                          <span className="text-sm">🎯</span>
+                          <span>Find Nearest Hub</span>
+                          <span className="inline-block w-2 h-2 rounded-full bg-white animate-ping ml-1"></span>
                         </button>
                       </div>
                     </div>

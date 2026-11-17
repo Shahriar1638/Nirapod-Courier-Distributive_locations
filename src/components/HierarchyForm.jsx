@@ -18,7 +18,8 @@ export default function HierarchyForm({
   getWardsAndUnions,
   getAvailableAreas,
   getAvailableSubAreas,
-  onSyncFromCoords
+  onSyncFromCoords,
+  onFindNearestHub
 }) {
   const isPickup = type === 'pickup';
   const isOut = result?.hubAssign?.isOutOfZone;
@@ -312,6 +313,23 @@ export default function HierarchyForm({
             />
           </div>
         </div>
+      </div>
+
+      {/* Action Button: Find Nearest Hub with Glow Effect */}
+      <div className="pt-2">
+        <button
+          type="button"
+          onClick={onFindNearestHub}
+          className={`w-full py-2.5 px-4 rounded-2xl font-black text-xs text-white shadow-lg border flex items-center justify-center space-x-2 transition-all transform active:scale-95 uppercase tracking-wider cursor-pointer ${
+            isPickup
+              ? 'bg-gradient-to-r from-emerald-600 via-teal-500 to-emerald-600 hover:from-emerald-500 hover:to-teal-400 border-emerald-400/70 glow-btn'
+              : 'bg-gradient-to-r from-sky-600 via-teal-500 to-sky-600 hover:from-sky-500 hover:to-teal-400 border-sky-400/70 glow-btn-sky'
+          }`}
+        >
+          <span className="text-sm">🎯</span>
+          <span>Find Nearest Hub</span>
+          <span className="inline-block w-2 h-2 rounded-full bg-white animate-ping ml-1"></span>
+        </button>
       </div>
 
       {/* Assigned Hub Live Box */}
