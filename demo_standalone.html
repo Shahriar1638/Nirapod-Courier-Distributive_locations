@@ -1,0 +1,2671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nirapod Courier - Intelligent Hub & Zone Routing System (OSM Powered)</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React & Babel -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Data script for offline / file:// protocol loading -->
+  <script src="./location_data.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Hind+Siliguri:wght@400;600;700&display=swap');
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+    .bangla-text {
+      font-family: 'Hind Siliguri', sans-serif;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased min-h-screen flex flex-col">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+    // Haversine distance in KM
+    function getDistanceKm(lat1, lon1, lat2, lon2) {
+      const R = 6371; // Earth radius in km
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    // Nirapod Courier Network Operational Hubs
+    const COURIER_HUBS = [
+      {
+        code: 'MIR-10',
+        name: 'Mirpur 10 Central Hub',
+        nameBn: 'মিরপুর ১০ সেন্ট্রাল হাব',
+        thana: 'Mirpur',
+        lat: 23.8071,
+        lon: 90.3686,
+        address: 'Plot 12, Block C, Section 10, Mirpur, Dhaka-1216',
+        rider: 'Karimul Islam (Mirpur Fleet #04)',
+        coverageKeywords: ['mirpur', 'stadium', 'senpara', 'kafrul', 'kazipara', 'shewrapara', 'pallabi', 'monipur', 'baishteki', 'kalshi', 'dohs mirpur'],
+        postcodes: ['1216'],
+        maxPrimaryRadiusKm: 6.0
+      },
+      {
+        code: 'DHN-27',
+        name: 'Dhanmondi 27 Hub',
+        nameBn: 'ধানমন্ডি ২৭ হাব',
+        thana: 'Dhanmondi',
+        lat: 23.7538,
+        lon: 90.3768,
+        address: 'House 34, Road 27 (Old), Dhanmondi, Dhaka-1209',
+        rider: 'Tanvir Ahmed (Dhanmondi Fleet #09)',
+        coverageKeywords: ['dhanmondi', 'kalabagan', 'shankar', 'jigatola', 'sukrabad', 'sobhanbagh', 'panthapath', 'science lab'],
+        postcodes: ['1209', '1205'],
+        maxPrimaryRadiusKm: 5.5
+      },
+      {
+        code: 'UTT-03',
+        name: 'Uttara Model Town Hub',
+        nameBn: 'উত্তরা মডেল টাউন হাব',
+        thana: 'Uttara',
+        lat: 23.8698,
+        lon: 90.3995,
+        address: 'Sector 3, Jasimuddin Avenue, Uttara, Dhaka-1230',
+        rider: 'Mehedi Hasan (Uttara Fleet #02)',
+        coverageKeywords: ['uttara', 'airport', 'abdullahpur', 'dakshinkhan', 'uttarkhan', 'turag', 'diabari'],
+        postcodes: ['1230'],
+        maxPrimaryRadiusKm: 6.5
+      },
+      {
+        code: 'GLS-02',
+        name: 'Gulshan 2 Hub',
+        nameBn: 'গুলশান ২ হাব',
+        thana: 'Gulshan',
+        lat: 23.7925,
+        lon: 90.4152,
+        address: 'Road 45, Gulshan 2, Dhaka-1212',
+        rider: 'Shafiqul Alam (Gulshan Fleet #07)',
+        coverageKeywords: ['gulshan', 'banani', 'baridhara', 'niketan', 'mohakhali', 'badda', 'shahjadpur'],
+        postcodes: ['1212', '1213'],
+        maxPrimaryRadiusKm: 5.5
+      },
+      {
+        code: 'MTJ-01',
+        name: 'Motijheel Central Hub',
+        nameBn: 'মতিঝিল সেন্ট্রাল হাব',
+        thana: 'Motijheel',
+        lat: 23.7291,
+        lon: 90.4132,
+        address: 'Dhaka GPO, Motijheel Commercial Area, Dhaka-1000',
+        rider: 'Abdur Rahim (Motijheel Fleet #01)',
+        coverageKeywords: ['motijheel', 'dilkusha', 'paltan', 'kakrail', 'malibagh', 'shantinagar', 'siddheswari', 'lalbagh', 'chawkbazar', 'sadarghat', 'wari'],
+        postcodes: ['1000', '1100', '1203', '1211', '1217'],
+        maxPrimaryRadiusKm: 6.0
+      },
+      {
+        code: 'MHD-01',
+        name: 'Mohammadpur Hub',
+        nameBn: 'মোহাম্মদপুর হাব',
+        thana: 'Mohammadpur',
+        lat: 23.7588,
+        lon: 90.3621,
+        address: 'Ring Road, Mohammadpur, Dhaka-1207',
+        rider: 'Jamil Hossain (Mohammadpur Fleet #05)',
+        coverageKeywords: ['mohammadpur', 'shyamoli', 'adabor', 'bosila', 'tajmahal', 'japan garden', 'kallayanpur'],
+        postcodes: ['1207'],
+        maxPrimaryRadiusKm: 5.0
+      },
+      {
+        code: 'CTG-AGR',
+        name: 'Chattogram Agrabad Port Hub',
+        nameBn: 'চট্টগ্রাম আগ্রাবাদ পোর্ট হাব',
+        thana: 'Double Mooring',
+        lat: 22.3278,
+        lon: 91.8122,
+        address: 'Agrabad Commercial Area, Chattogram-4100',
+        rider: 'Kamal Uddin (CTG Fleet #03)',
+        coverageKeywords: ['chattogram', 'agrabad', 'halishahar', 'patenga', 'chittagong', 'gec', 'nasirabad'],
+        postcodes: ['4100', '4000'],
+        maxPrimaryRadiusKm: 8.0
+      },
+      {
+        code: 'SYL-ZND',
+        name: 'Sylhet Zindabazar Hub',
+        nameBn: 'সিলেট জিন্দাবাজার হাব',
+        thana: 'Kotwali',
+        lat: 24.8988,
+        lon: 91.8714,
+        address: 'Zindabazar Point, Sylhet-3100',
+        rider: 'Foyzul Haque (Sylhet Fleet #02)',
+        coverageKeywords: ['sylhet', 'zindabazar', 'amberkhana', 'shibganj', 'upashahar', 'lamabazar'],
+        postcodes: ['3100'],
+        maxPrimaryRadiusKm: 7.0
+      }
+    ];
+
+    // Authoritative Courier City Areas (Level 4) and Sub-Areas (Level 5) Catalog
+    const COURIER_CITY_CATALOG = {
+      'Dhaka': {
+        'Mirpur': [
+          'Mirpur 1', 'Mirpur 2', 'Mirpur 6', 'Mirpur 10', 'Mirpur 11',
+          'Mirpur 12', 'Mirpur 13', 'Mirpur 14', 'Mirpur DOHS', 'Kazipara',
+          'Shewrapara', 'Senpara Porbota', 'Pallabi', 'Paikpara', 'Kallayanpur'
+        ],
+        'Dhanmondi': [
+          'Dhanmondi 27 (Old)', 'Dhanmondi 32', 'Dhanmondi 15', 'Dhanmondi R/A (Road 1-16)',
+          'Shankar', 'Kalabagan', 'Sobhanbagh', 'Sukrabad', 'Jigatola', 'Science Lab'
+        ],
+        'Badda': [
+          'North Badda (Uttar Badda)', 'South Badda (Dakshin Badda)', 'Merul Badda',
+          'Middle Badda', 'Aftabnagar', 'Badda Link Road'
+        ],
+        'Uttara': [
+          'Sector 1', 'Sector 2', 'Sector 3', 'Sector 4', 'Sector 5', 'Sector 6',
+          'Sector 7', 'Sector 8', 'Sector 9', 'Sector 10', 'Sector 11', 'Sector 12',
+          'Sector 13', 'Sector 14', 'Sector 15', 'Sector 16', 'Sector 17', 'Sector 18',
+          'Diabari', 'Abdullahpur', 'Airport Area'
+        ],
+        'Gulshan': [
+          'Gulshan 1', 'Gulshan 2', 'Niketan', 'Baridhara Diplomatic Zone',
+          'Baridhara DOHS', 'Shahjadpur'
+        ],
+        'Banani': [
+          'Banani (Road 11)', 'Banani DOHS', 'Chairman Bari', 'Kakoli', 'Kamal Ataturk Avenue'
+        ],
+        'Mohammadpur': [
+          'Ring Road', 'Japan Garden City', 'Tajmahal Road', 'Salimullah Road',
+          'Town Hall', 'Noorjahan Road', 'Humayun Road', 'Babor Road', 'Iqbal Road',
+          'Bosila', 'Adabor', 'Shyamoli'
+        ],
+        'Motijheel': [
+          'Commercial Area', 'Dilkusha', 'Arambagh', 'Fakirapool', 'Dhaka GPO'
+        ],
+        'Paltan': [
+          'Purana Paltan', 'Naya Paltan', 'Bijoynagar', 'Kakrail', 'Press Club Area'
+        ],
+        'Jatrabari': [
+          'Sayedabad', 'Dholairpar', 'Donia', 'Matuail', 'Konapara', 'Kajla'
+        ],
+        'Khilgaon': [
+          'Khilgaon Taltola', 'Goran', 'Tilpapara', 'Sipahibagh', 'Khilgaon Flyover'
+        ],
+        'Tejgaon': [
+          'Tejgaon Industrial Area', 'Tejkunipara', 'Nakhalpara', 'Farmgate', 'Kawran Bazar'
+        ],
+        'Rampura': [
+          'Banasree (Block A-N)', 'East Rampura', 'West Rampura', 'Haji Para', 'Wapda Road'
+        ],
+        'Bashundhara': [
+          'Block A', 'Block B', 'Block C', 'Block D', 'Block E', 'Block F',
+          'Block G', 'Block I', 'Block M', 'Evercare Area', '300 Feet Purbachal Express'
+        ],
+        'Old Dhaka': [
+          'Lalbagh Fort Area', 'Chawkbazar', 'Armanitola', 'Sadarghat', 'Islampur',
+          'Posta', 'Wari', 'Sutrapur', 'Tanti Bazar', 'Shakhari Bazar'
+        ],
+        'Savar (Suburban)': [
+          'Savar Bus Stand', 'Savar Bazar', 'Baipail', 'EPZ Area', 'Ashulia',
+          'Birulia', 'Dhamsona', 'Aminbazar'
+        ],
+        'Keraniganj (Suburban)': [
+          'Rohitpur Bazar', 'Zinjira', 'Hasnabad', 'Kadamtole', 'Ati Bazar'
+        ]
+      },
+      'Chattogram': {
+        'Agrabad': ['Agrabad Commercial Area', 'Chittagong Port', 'Chowmuhani', 'Barik Building'],
+        'GEC': ['GEC Circle', 'Nasirabad', 'Khulshi', 'Dampara'],
+        'Halishahar': ['Block A', 'Block B', 'Block H', 'Block K', 'Boropol'],
+        'Kotwali': ['Anderkilla', 'Chawkbazar', 'Laldighi', 'New Market Area'],
+        'Patenga': ['Patenga Sea Beach', 'Airport Area', 'EPZ Area']
+      },
+      'Sylhet': {
+        'Zindabazar': ['Zindabazar Point', 'Bandarbazar', 'Chowhatta'],
+        'Amberkhana': ['Amberkhana Point', 'Dargah Gate', 'Housing Estate'],
+        'Shibganj': ['Shibganj Bazar', 'Tilagarh', 'MC College Area'],
+        'Upashahar': ['Block A', 'Block B', 'Block C', 'Block D', 'Shahjalal Upashahar']
+      }
+    };
+
+    // Client Demo Scenarios
+    const DEMO_SCENARIOS = [
+      {
+        name: "1. Mirpur (Sec 6) ➔ Dhanmondi (Rd 27) [Senior's Example]",
+        desc: "L4: Mirpur ➔ L5: Mirpur 6 | L4: Dhanmondi ➔ L5: Dhanmondi 27",
+        pickup: { area: "Mirpur", subArea: "Mirpur 6", road: "Mirpur Stadium, Section 6", lat: 23.8060, lon: 90.3630, thana: "Mirpur", upazila: "", wardUnion: "Ward 10" },
+        delivery: { area: "Dhanmondi", subArea: "Dhanmondi 27 (Old)", road: "House 34, Road 27, Rapa Plaza", lat: 23.7538, lon: 90.3768, thana: "Dhanmondi", upazila: "", wardUnion: "Ward 15" }
+      },
+      {
+        name: "2. ⚠️ Out-of-Zone: Savar (Baipail) ➔ Dhanmondi (Rd 27)",
+        desc: "L4: Savar (Suburban) ➔ L5: Baipail | Auto-routed to MIR-10 Hub (11.9 km)",
+        pickup: { area: "Savar (Suburban)", subArea: "Baipail", road: "Baipail Bus Stand, Dhaka-Aricha Highway", lat: 23.8442, lon: 90.2582, thana: "", upazila: "Savar", wardUnion: "Savar" },
+        delivery: { area: "Dhanmondi", subArea: "Dhanmondi 27 (Old)", road: "Road 27, Dhanmondi", lat: 23.7538, lon: 90.3768, thana: "Dhanmondi", upazila: "", wardUnion: "Ward 15" }
+      },
+      {
+        name: "3. Mirpur (Sec 10) ➔ ⚠️ Out-of-Zone: Ashulia EPZ",
+        desc: "L4: Mirpur ➔ L5: Mirpur 10 (Hope School) | L4: Savar ➔ L5: Ashulia",
+        pickup: { area: "Mirpur", subArea: "Mirpur 10", road: "Hope International School, Section 10", lat: 23.80811, lon: 90.37306, thana: "Mirpur", upazila: "", wardUnion: "Ward 10" },
+        delivery: { area: "Savar (Suburban)", subArea: "Ashulia", road: "DEPZ Gate 1, Ashulia", lat: 23.9452, lon: 90.2980, thana: "", upazila: "Savar", wardUnion: "Ashulia" }
+      },
+      {
+        name: "4. Badda (Merul Badda) ➔ Gulshan (Gulshan 2)",
+        desc: "L4: Badda ➔ L5: Merul Badda | L4: Gulshan ➔ L5: Gulshan 2",
+        pickup: { area: "Badda", subArea: "Merul Badda", road: "DIT Project Road 5, Merul Badda", lat: 23.7690, lon: 90.4250, thana: "Badda", upazila: "", wardUnion: "Ward 21" },
+        delivery: { area: "Gulshan", subArea: "Gulshan 2", road: "Road 45, Gulshan 2 Circle", lat: 23.7925, lon: 90.4152, thana: "Gulshan", upazila: "", wardUnion: "Ward 19" }
+      },
+      {
+        name: "5. Uttara (Sec 7) ➔ Motijheel (Commercial Area)",
+        desc: "L4: Uttara ➔ L5: Sector 7 | L4: Motijheel ➔ L5: Commercial Area",
+        pickup: { area: "Uttara", subArea: "Sector 7", road: "Rabindra Sarani, Sector 7", lat: 23.8712, lon: 90.3980, thana: "Uttara", upazila: "", wardUnion: "Ward 1" },
+        delivery: { area: "Motijheel", subArea: "Commercial Area", road: "Dhaka GPO, Motijheel C/A", lat: 23.7291, lon: 90.4132, thana: "Motijheel", upazila: "", wardUnion: "Ward 31" }
+      }
+    ];
+
+    function App() {
+      const [dataset, setDataset] = useState(null);
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState(null);
+
+      // Active Tab
+      const [activeTab, setActiveTab] = useState('router');
+
+      // PICKUP STATE: 7-Level Hierarchy with Separate Upazila/Thana, Fixed Area Dropdown & Dual Sub-Area
+      const [pickupLat, setPickupLat] = useState("23.8060");
+      const [pickupLon, setPickupLon] = useState("90.3630");
+      const [pickupHierarchy, setPickupHierarchy] = useState({
+        division: "Dhaka",
+        district: "Dhaka",
+        upazila: "",
+        thana: "Mirpur",
+        wardUnion: "Ward 10",
+        area: "Mirpur",
+        subArea: "Mirpur 6",
+        block: "",
+        road: "Mirpur Stadium, Section 6"
+      });
+      const [pickupResult, setPickupResult] = useState(null);
+
+      // DELIVERY STATE: 7-Level Hierarchy with Separate Upazila/Thana, Fixed Area Dropdown & Dual Sub-Area
+      const [deliveryLat, setDeliveryLat] = useState("23.7538");
+      const [deliveryLon, setDeliveryLon] = useState("90.3768");
+      const [deliveryHierarchy, setDeliveryHierarchy] = useState({
+        division: "Dhaka",
+        district: "Dhaka",
+        upazila: "",
+        thana: "Dhanmondi",
+        wardUnion: "Ward 15",
+        area: "Dhanmondi",
+        subArea: "Dhanmondi 27 (Old)",
+        block: "",
+        road: "House 34, Road 27, Rapa Plaza"
+      });
+      const [deliveryResult, setDeliveryResult] = useState(null);
+
+      // Pricing & Manifest Dynamic Parameters
+      const [pkgWeight, setPkgWeight] = useState(1);
+      const [deliverySpeed, setDeliverySpeed] = useState('standard');
+      const [codAmount, setCodAmount] = useState(1500);
+
+      // Inspector (Tab 2) State with 7-Level Hierarchy
+      const [inspLat, setInspLat] = useState("23.80811");
+      const [inspLon, setInspLon] = useState("90.37306");
+      const [inspHierarchy, setInspHierarchy] = useState({
+        division: "Dhaka",
+        district: "Dhaka",
+        upazila: "",
+        thana: "Mirpur",
+        wardUnion: "Ward 10",
+        area: "Mirpur",
+        subArea: "Mirpur 10",
+        block: "Block C",
+        road: "Hope International School Road, Section 10"
+      });
+      const [inspResult, setInspResult] = useState(null);
+
+      const [copiedWaybill, setCopiedWaybill] = useState(false);
+      const [copiedInsp, setCopiedInsp] = useState(false);
+
+      // Load dataset
+      useEffect(() => {
+        try {
+          if (window.LOCATION_DATA) {
+            setDataset(window.LOCATION_DATA);
+            setLoading(false);
+          } else {
+            fetch('./location_data.json')
+              .then(res => res.json())
+              .then(data => {
+                setDataset(data);
+                setLoading(false);
+              })
+              .catch(err => {
+                setError("Could not load location_data.json or location_data.js. Ensure the file exists in the directory.");
+                setLoading(false);
+              });
+          }
+        } catch (e) {
+          setError(e.message);
+          setLoading(false);
+        }
+      }, []);
+
+      // Divisions list
+      const divisionList = useMemo(() => {
+        if (!dataset) return ['Dhaka'];
+        return dataset.divisions.map(d => d.name);
+      }, [dataset]);
+
+      // Districts for a Division
+      const getDistrictsForDivision = (divName) => {
+        if (!dataset) return ['Dhaka'];
+        const matched = dataset.districts.filter(d => d.division_name === divName);
+        return matched.length > 0 ? matched.map(d => d.name) : ['Dhaka'];
+      };
+
+      // Upazilas for a District (Rural / Suburban)
+      const getUpazilasForDistrict = (distName) => {
+        if (!dataset) return ['Savar', 'Dhamrai', 'Keraniganj', 'Nawabganj', 'Dohar'];
+        return dataset.upazilas.filter(u => u.district_name === distName).map(u => u.name).sort();
+      };
+
+      // Thanas for a District (Metropolitan)
+      const getThanasForDistrict = (distName) => {
+        if (!dataset) return ['Mirpur', 'Dhanmondi', 'Gulshan', 'Uttara', 'Mohammadpur', 'Motijheel'];
+        const metroPosts = dataset.postcodes.filter(p => p.district_name === distName && p.thana);
+        return [...new Set(metroPosts.map(p => p.thana))].sort();
+      };
+
+      // Unions for an Upazila
+      const getUnionsForUpazila = (upzName, distName) => {
+        if (!dataset || !upzName) return [];
+        return dataset.unions
+          .filter(u => u.upazila_name?.toLowerCase() === upzName.toLowerCase() || (distName && u.district_name?.toLowerCase() === distName.toLowerCase() && u.upazila_name?.toLowerCase() === upzName.toLowerCase()))
+          .map(u => u.name)
+          .sort();
+      };
+
+      // Available Level 4 Areas for current District / City
+      const getAvailableCityAreas = (distName) => {
+        const catalog = COURIER_CITY_CATALOG[distName] || COURIER_CITY_CATALOG['Dhaka'];
+        return Object.keys(catalog);
+      };
+
+      // Available Level 5 Sub-Areas for a selected Level 4 Area
+      const getAvailableSubAreas = (areaName, distName) => {
+        if (!areaName) return [];
+        const catalog = COURIER_CITY_CATALOG[distName] || COURIER_CITY_CATALOG['Dhaka'];
+        return catalog[areaName] || [];
+      };
+
+      // Standard City Corporation Wards
+      const METRO_WARDS = useMemo(() => Array.from({ length: 54 }, (_, i) => `Ward ${i + 1}`), []);
+
+      // Core Reverse Geocoder with Level Mapping
+      function resolveCoordinatesToHierarchy(lat, lon) {
+        if (!dataset) return null;
+
+        // 1. Division
+        let bestDiv = null, minDivDist = Infinity;
+        for (const d of dataset.divisions) {
+          const dist = getDistanceKm(lat, lon, d.lat, d.lon);
+          if (dist < minDivDist) { minDivDist = dist; bestDiv = d; }
+        }
+
+        // 2. District
+        let bestDist = null, minDistDist = Infinity;
+        for (const d of dataset.districts) {
+          const dist = getDistanceKm(lat, lon, d.lat, d.lon);
+          if (dist < minDistDist) { minDistDist = dist; bestDist = d; }
+        }
+
+        // 3. Postcode
+        let bestPost = null, minPostDist = Infinity;
+        for (const p of dataset.postcodes) {
+          const dist = getDistanceKm(lat, lon, p.lat, p.lon);
+          if (dist < minPostDist) { minPostDist = dist; bestPost = p; }
+        }
+
+        // 4. City Corporation
+        let nearestCC = null, minCCDist = Infinity;
+        for (const cc of dataset.city_corporations) {
+          const dist = getDistanceKm(lat, lon, cc.lat, cc.lon);
+          if (dist < minCCDist) { minCCDist = dist; nearestCC = cc; }
+        }
+
+        const isMetro = Boolean(
+          (bestPost && bestPost.city_corporation) ||
+          (nearestCC && minCCDist <= 18 && bestPost && bestPost.thana && !bestPost.upazila_name)
+        );
+
+        let resolvedUpazila = "";
+        let resolvedThana = "";
+        let resolvedUnion = null;
+
+        if (isMetro) {
+          resolvedThana = bestPost?.thana || (nearestCC ? nearestCC.name : 'Metro Thana');
+          resolvedUpazila = "";
+        } else {
+          let bestUpz = null, minUpzDist = Infinity;
+          for (const u of dataset.upazilas) {
+            const dist = getDistanceKm(lat, lon, u.lat, u.lon);
+            if (dist < minUpzDist) { minUpzDist = dist; bestUpz = u; }
+          }
+          resolvedUpazila = bestUpz?.name || "";
+          resolvedThana = bestPost?.thana || "";
+
+          let minUnionDist = Infinity;
+          for (const un of dataset.unions) {
+            const dist = getDistanceKm(lat, lon, un.lat, un.lon);
+            if (dist < minUnionDist) { minUnionDist = dist; resolvedUnion = un; }
+          }
+        }
+
+        // 5. Nearest Landmark / POI (within 400m)
+        let nearestLandmark = null;
+        if (dataset.osm_landmarks && dataset.osm_landmarks.length > 0) {
+          let minLandmarkDist = Infinity;
+          for (const lm of dataset.osm_landmarks) {
+            const dist = getDistanceKm(lat, lon, lm.lat, lm.lon);
+            if (dist < minLandmarkDist) {
+              minLandmarkDist = dist;
+              nearestLandmark = { ...lm, dist };
+            }
+          }
+          if (minLandmarkDist > 0.40) nearestLandmark = null;
+        }
+
+        // 6. OSM Places
+        const sortedPlaces = [];
+        for (const place of dataset.osm_places) {
+          const dist = getDistanceKm(lat, lon, place.lat, place.lon);
+          if (dist <= 35) {
+            sortedPlaces.push({ ...place, dist });
+          }
+        }
+        sortedPlaces.sort((a, b) => a.dist - b.dist);
+
+        const microPlace = sortedPlaces.find(p => p.type === 'city_block' && p.dist < 0.6);
+        const macroPlace = sortedPlaces.find(p => ['quarter', 'suburb', 'neighbourhood', 'town', 'city', 'village'].includes(p.type) && p.dist < 3.5);
+        const primaryOsm = macroPlace || sortedPlaces[0] || null;
+
+        // Map resolved Thana/Place to Courier City Area
+        let matchedArea = "Mirpur";
+        const placeName = (macroPlace?.nameEn || primaryOsm?.nameEn || resolvedThana || '').toLowerCase();
+        
+        const cityAreas = getAvailableCityAreas(bestDist?.name || 'Dhaka');
+        for (const a of cityAreas) {
+          if (placeName.includes(a.toLowerCase())) {
+            matchedArea = a;
+            break;
+          }
+        }
+
+        const extractedHierarchy = {
+          division: bestDiv?.name || 'Dhaka',
+          district: bestDist?.name || 'Dhaka',
+          upazila: resolvedUpazila,
+          thana: resolvedThana,
+          wardUnion: resolvedUnion ? resolvedUnion.name : (isMetro ? 'Ward 10' : ''),
+          area: matchedArea,
+          subArea: macroPlace ? macroPlace.nameEn : '',
+          block: microPlace ? microPlace.nameEn : '',
+          road: nearestLandmark ? `${nearestLandmark.nameEn}` : ''
+        };
+
+        const partsEn = [];
+        const partsBn = [];
+
+        if (nearestLandmark) {
+          partsEn.push(nearestLandmark.nameEn || nearestLandmark.name);
+          partsBn.push(nearestLandmark.nameBn || nearestLandmark.name);
+        }
+        if (microPlace) {
+          partsEn.push(microPlace.nameEn);
+          partsBn.push(microPlace.nameBn);
+        }
+        if (macroPlace && (!nearestLandmark || !nearestLandmark.name.toLowerCase().includes(macroPlace.name.toLowerCase()))) {
+          partsEn.push(macroPlace.nameEn);
+          partsBn.push(macroPlace.nameBn);
+        }
+
+        if (isMetro) {
+          if (resolvedThana) partsEn.push(`${resolvedThana} Thana`);
+          if (bestDist?.name) partsEn.push(bestDist.name);
+        } else {
+          if (resolvedUnion?.name) partsEn.push(`${resolvedUnion.name} Union`);
+          if (resolvedUpazila) partsEn.push(`${resolvedUpazila} Upazila`);
+          if (bestDist?.name) partsEn.push(`${bestDist.name} District`);
+        }
+
+        if (bestPost?.postcode) partsEn.push(`Postcode: ${bestPost.postcode}`);
+
+        const humanReadableAddressEn = partsEn.filter(Boolean).join(', ');
+        const humanReadableAddressBn = partsBn.filter(Boolean).join(', ');
+
+        return {
+          coords: { lat, lon },
+          isMetro,
+          humanReadableAddressEn,
+          humanReadableAddressBn,
+          extractedHierarchy,
+          nearestLandmark,
+          microPlace,
+          macroPlace,
+          primaryPlace: primaryOsm,
+          division: bestDiv,
+          district: bestDist,
+          upazila: resolvedUpazila,
+          thana: resolvedThana,
+          union: resolvedUnion,
+          postcode: bestPost
+        };
+      }
+
+      // Intelligent Hub Assignment & Out-of-Zone Fallback
+      function assignCourierHub(locationInfo, customHierarchy, isPickup = true) {
+        if (!locationInfo) return null;
+
+        const coords = locationInfo.coords;
+        const textToMatch = (
+          (customHierarchy?.division || '') + ' ' +
+          (customHierarchy?.district || '') + ' ' +
+          (customHierarchy?.upazila || '') + ' ' +
+          (customHierarchy?.thana || '') + ' ' +
+          (customHierarchy?.wardUnion || '') + ' ' +
+          (customHierarchy?.area || '') + ' ' +
+          (customHierarchy?.subArea || '') + ' ' +
+          (customHierarchy?.block || '') + ' ' +
+          (customHierarchy?.road || '') + ' ' +
+          (locationInfo.nearestLandmark?.name || '') + ' ' +
+          (locationInfo.microPlace?.name || '') + ' ' +
+          (locationInfo.macroPlace?.name || '') + ' ' +
+          (locationInfo.humanReadableAddressEn || '')
+        ).toLowerCase();
+
+        // 1. Direct Keyword Zone Matching
+        for (const hub of COURIER_HUBS) {
+          for (const kw of hub.coverageKeywords) {
+            if (textToMatch.includes(kw)) {
+              const d = getDistanceKm(coords.lat, coords.lon, hub.lat, hub.lon);
+              if (d <= hub.maxPrimaryRadiusKm + 2.5) {
+                return {
+                  hub,
+                  isOutOfZone: false,
+                  routingType: isPickup ? 'IN_ZONE_FIRST_MILE' : 'IN_ZONE_LAST_MILE',
+                  rule: `Primary Zone Coverage ("${kw}")`,
+                  distanceKm: d.toFixed(1),
+                  sla: 'Same-Day Express (< 6 Hours)',
+                  cost: '৳60 Intra-City Standard',
+                  dispatchNote: isPickup
+                    ? `Inside primary hub zone. Local fleet rider dispatched: ${hub.rider}.`
+                    : `Inside primary delivery zone. Local delivery fleet assigned: ${hub.rider}.`
+                };
+              }
+            }
+          }
+        }
+
+        // 2. Postal Code Routing
+        if (locationInfo.postcode?.postcode) {
+          for (const hub of COURIER_HUBS) {
+            if (hub.postcodes.includes(locationInfo.postcode.postcode)) {
+              const d = getDistanceKm(coords.lat, coords.lon, hub.lat, hub.lon);
+              if (d <= hub.maxPrimaryRadiusKm + 2.0) {
+                return {
+                  hub,
+                  isOutOfZone: false,
+                  routingType: isPickup ? 'IN_ZONE_FIRST_MILE' : 'IN_ZONE_LAST_MILE',
+                  rule: `Postal Code Routing (${locationInfo.postcode.postcode})`,
+                  distanceKm: d.toFixed(1),
+                  sla: 'Same-Day Express (< 6 Hours)',
+                  cost: '৳60 Intra-City Standard',
+                  dispatchNote: isPickup
+                    ? `Assigned to origin hub by Postcode. Local fleet rider: ${hub.rider}.`
+                    : `Dispatched from destination hub by Postcode. Rider: ${hub.rider}.`
+                };
+              }
+            }
+          }
+        }
+
+        // 3. Proximity Calculation to ALL Hubs
+        let nearestHub = null;
+        let minDistance = Infinity;
+
+        for (const hub of COURIER_HUBS) {
+          const d = getDistanceKm(coords.lat, coords.lon, hub.lat, hub.lon);
+          if (d < minDistance) {
+            minDistance = d;
+            nearestHub = hub;
+          }
+        }
+
+        if (minDistance <= (nearestHub.maxPrimaryRadiusKm || 5.0)) {
+          return {
+            hub: nearestHub,
+            isOutOfZone: false,
+            routingType: isPickup ? 'IN_ZONE_PROXIMITY' : 'IN_ZONE_PROXIMITY',
+            rule: `Proximity Dispatch (${minDistance.toFixed(1)} km)`,
+            distanceKm: minDistance.toFixed(1),
+            sla: 'Same-Day Standard',
+            cost: '৳60 Intra-City Standard',
+            dispatchNote: isPickup
+              ? `Nearby origin within service radius. Dispatched from ${nearestHub.name}.`
+              : `Nearby destination within delivery radius. Dispatched from ${nearestHub.name}.`
+          };
+        }
+
+        // 4. OUT-OF-ZONE / UNCOVERED REGION DETECTED!
+        return {
+          hub: nearestHub,
+          isOutOfZone: true,
+          routingType: isPickup ? 'OUT_OF_ZONE_FIRST_MILE_FALLBACK' : 'OUT_OF_ZONE_LAST_MILE_FALLBACK',
+          rule: isPickup
+            ? `⚠️ Out-of-Zone Auto-Calculation: Nearest First-Mile Hub (${minDistance.toFixed(1)} km away)`
+            : `⚠️ Out-of-Zone Auto-Calculation: Nearest Last-Mile Hub (${minDistance.toFixed(1)} km away)`,
+          distanceKm: minDistance.toFixed(1),
+          sla: 'Sub-Urban Feeder Transit: Next-Day SLA (+24 Hours)',
+          cost: '৳90 (৳60 Base + ৳30 Out-of-Zone Surcharge)',
+          dispatchNote: isPickup
+            ? `ORIGIN IS OUTSIDE PRIMARY HUB ZONE! Auto-assigned closest First-Mile Hub [${nearestHub.code}]. Feeder pickup van dispatched to collect parcel.`
+            : `DESTINATION IS OUTSIDE PRIMARY HUB ZONE! Auto-routed to closest Last-Mile Hub [${nearestHub.code}]. Transferred via Linehaul for extended drop-off.`
+        };
+      }
+
+      // Update Pickup
+      useEffect(() => {
+        if (!dataset) return;
+        const pLat = parseFloat(pickupLat);
+        const pLon = parseFloat(pickupLon);
+        if (!isNaN(pLat) && !isNaN(pLon)) {
+          const loc = resolveCoordinatesToHierarchy(pLat, pLon);
+          const hubAssign = assignCourierHub(loc, pickupHierarchy, true);
+          setPickupResult({ loc, hubAssign });
+        }
+      }, [dataset, pickupLat, pickupLon, pickupHierarchy]);
+
+      // Update Delivery
+      useEffect(() => {
+        if (!dataset) return;
+        const dLat = parseFloat(deliveryLat);
+        const dLon = parseFloat(deliveryLon);
+        if (!isNaN(dLat) && !isNaN(dLon)) {
+          const loc = resolveCoordinatesToHierarchy(dLat, dLon);
+          const hubAssign = assignCourierHub(loc, deliveryHierarchy, false);
+          setDeliveryResult({ loc, hubAssign });
+        }
+      }, [dataset, deliveryLat, deliveryLon, deliveryHierarchy]);
+
+      // Update Single Inspector (Tab 2)
+      useEffect(() => {
+        if (!dataset) return;
+        const lat = parseFloat(inspLat);
+        const lon = parseFloat(inspLon);
+        if (!isNaN(lat) && !isNaN(lon)) {
+          const loc = resolveCoordinatesToHierarchy(lat, lon);
+          const hubAssign = assignCourierHub(loc, inspHierarchy, true);
+          setInspResult({ loc, hubAssign });
+        }
+      }, [dataset, inspLat, inspLon, inspHierarchy]);
+
+      // Inspector Hierarchy Handler (L1-L5 selection auto-syncs coordinates)
+      function updateInspectorHierarchy(field, val) {
+        setInspHierarchy(prev => {
+          const next = { ...prev, [field]: val };
+          if (field === 'division') {
+            const dists = getDistrictsForDivision(val);
+            next.district = dists[0] || 'Dhaka';
+            next.upazila = '';
+            next.thana = '';
+            next.wardUnion = '';
+          } else if (field === 'district') {
+            next.upazila = '';
+            next.thana = '';
+            next.wardUnion = '';
+          } else if (field === 'upazila') {
+            if (val) next.thana = '';
+            next.wardUnion = '';
+          } else if (field === 'thana') {
+            if (val) next.upazila = '';
+            next.wardUnion = '';
+          } else if (field === 'area') {
+            const subList = getAvailableSubAreas(val, next.district);
+            next.subArea = subList[0] || '';
+          }
+          return next;
+        });
+
+        if (!dataset) return;
+        if (field === 'area' || field === 'subArea') {
+          const searchName = (val || '').toLowerCase();
+          const match = dataset.osm_places?.find(p => 
+            p.nameEn?.toLowerCase() === searchName || 
+            p.name?.toLowerCase() === searchName ||
+            p.nameEn?.toLowerCase().includes(searchName)
+          );
+          if (match && match.lat && match.lon) {
+            setInspLat(match.lat.toFixed(5));
+            setInspLon(match.lon.toFixed(5));
+          }
+        } else if (field === 'upazila') {
+          const upz = dataset.upazilas?.find(u => u.name.toLowerCase() === (val || '').toLowerCase());
+          if (upz && upz.lat && upz.lon) {
+            setInspLat(upz.lat.toFixed(5));
+            setInspLon(upz.lon.toFixed(5));
+          }
+        } else if (field === 'district') {
+          const dist = dataset.districts?.find(d => d.name.toLowerCase() === (val || '').toLowerCase());
+          if (dist && dist.lat && dist.lon) {
+            setInspLat(dist.lat.toFixed(5));
+            setInspLon(dist.lon.toFixed(5));
+          }
+        }
+      }
+
+      // Live Filtered Nearby Landmarks for [L7] in Single Coordinate Inspector
+      const inspectorNearbyLandmarks = useMemo(() => {
+        if (!dataset || !dataset.osm_landmarks) return [];
+        const lat = parseFloat(inspLat);
+        const lon = parseFloat(inspLon);
+        const areaName = (inspHierarchy.area || '').toLowerCase();
+        const subAreaName = (inspHierarchy.subArea || '').toLowerCase();
+
+        const results = [];
+        for (const lm of dataset.osm_landmarks) {
+          const dist = (!isNaN(lat) && !isNaN(lon)) ? getDistanceKm(lat, lon, lm.lat, lm.lon) : 999;
+          const matchArea = (lm.nameEn && (lm.nameEn.toLowerCase().includes(subAreaName) || lm.nameEn.toLowerCase().includes(areaName)));
+          if (dist <= 3.5 || (matchArea && dist <= 12.0)) {
+            results.push({ ...lm, dist });
+          }
+          if (results.length >= 24) break;
+        }
+        return results.sort((a, b) => a.dist - b.dist);
+      }, [dataset, inspLat, inspLon, inspHierarchy.area, inspHierarchy.subArea]);
+
+      // Apply Scenario
+      function applyScenario(sc) {
+        setPickupLat(sc.pickup.lat.toString());
+        setPickupLon(sc.pickup.lon.toString());
+        setDeliveryLat(sc.delivery.lat.toString());
+        setDeliveryLon(sc.delivery.lon.toString());
+
+        setPickupHierarchy({
+          division: "Dhaka",
+          district: "Dhaka",
+          upazila: sc.pickup.upazila || "",
+          thana: sc.pickup.thana || "",
+          wardUnion: sc.pickup.wardUnion || "",
+          area: sc.pickup.area || "Mirpur",
+          subArea: sc.pickup.subArea || "",
+          block: "",
+          road: sc.pickup.road || ""
+        });
+
+        setDeliveryHierarchy({
+          division: "Dhaka",
+          district: "Dhaka",
+          upazila: sc.delivery.upazila || "",
+          thana: sc.delivery.thana || "",
+          wardUnion: sc.delivery.wardUnion || "",
+          area: sc.delivery.area || "Dhanmondi",
+          subArea: sc.delivery.subArea || "",
+          block: "",
+          road: sc.delivery.road || ""
+        });
+      }
+
+      // Auto-populate hierarchy from coordinates
+      function syncHierarchyFromCoords(isPickup) {
+        if (!dataset) return;
+        const lat = parseFloat(isPickup ? pickupLat : deliveryLat);
+        const lon = parseFloat(isPickup ? pickupLon : deliveryLon);
+        if (isNaN(lat) || isNaN(lon)) return;
+        const loc = resolveCoordinatesToHierarchy(lat, lon);
+        if (loc?.extractedHierarchy) {
+          if (isPickup) {
+            setPickupHierarchy({ ...loc.extractedHierarchy });
+          } else {
+            setDeliveryHierarchy({ ...loc.extractedHierarchy });
+          }
+        }
+      }
+
+      // Re-anchor coordinates from hierarchy selection
+      function syncCoordsFromHierarchy(isPickup) {
+        if (!dataset) return;
+        const hier = isPickup ? pickupHierarchy : deliveryHierarchy;
+        let target = null;
+        
+        // 1. Check SubArea in OSM places
+        if (hier.subArea) {
+          target = dataset.osm_places.find(p => p.nameEn.toLowerCase() === hier.subArea.toLowerCase());
+        }
+        // 2. Check Area in OSM places
+        if (!target && hier.area) {
+          target = dataset.osm_places.find(p => p.nameEn.toLowerCase() === hier.area.toLowerCase());
+        }
+        // 3. Check Thana postcodes
+        if (!target && hier.thana) {
+          target = dataset.postcodes.find(p => p.thana && p.thana.toLowerCase() === hier.thana.toLowerCase());
+        }
+        // 4. Check Upazila
+        if (!target && hier.upazila) {
+          target = dataset.upazilas.find(u => u.name.toLowerCase() === hier.upazila.toLowerCase());
+        }
+
+        if (target) {
+          if (isPickup) {
+            setPickupLat(Number(target.lat).toFixed(5));
+            setPickupLon(Number(target.lon).toFixed(5));
+          } else {
+            setDeliveryLat(Number(target.lat).toFixed(5));
+            setDeliveryLon(Number(target.lon).toFixed(5));
+          }
+        }
+      }
+
+      // Copy Consignment Airway Bill Manifest
+      function copyWaybillText() {
+        if (!pickupResult || !deliveryResult) return;
+        const pHub = pickupResult.hubAssign?.hub;
+        const dHub = deliveryResult.hubAssign?.hub;
+        const pIsOut = pickupResult.hubAssign?.isOutOfZone;
+        const dIsOut = deliveryResult.hubAssign?.isOutOfZone;
+
+        const baseRate = 60;
+        const pickupSurcharge = pIsOut ? 30 : 0;
+        const deliverySurcharge = dIsOut ? 30 : 0;
+        const totalRate = baseRate + pickupSurcharge + deliverySurcharge;
+
+        const text =
+`================================================================
+NIRAPOD COURIER CONSIGNMENT MANIFEST & AIRWAY BILL
+Tracking Number: NC-2026-${pHub?.code || 'ORIG'}-${dHub?.code || 'DEST'}-${Math.floor(1000 + Math.random() * 9000)}
+================================================================
+[1] FIRST-MILE PICKUP:
+  - Origin Hub: [${pHub?.code}] ${pHub?.name}
+  - Zone Status: ${pIsOut ? '⚠️ OUT OF ZONE (Nearest First-Mile Hub Fallback - ' + pickupResult.hubAssign?.distanceKm + ' km)' : '🟢 IN-ZONE DIRECT COVERAGE'}
+  - Administrative Hierarchy:
+      [L1] Division: ${pickupHierarchy.division}
+      [L2] District: ${pickupHierarchy.district}
+      [L3-A] Upazila: ${pickupHierarchy.upazila || '(N/A - Metro Thana Area)'}
+      [L3-B] Thana: ${pickupHierarchy.thana || '(N/A - Rural Upazila Area)'}
+      [L3-C] Ward/Union: ${pickupHierarchy.wardUnion || '(Not Specified)'}
+      [L4] Area: ${pickupHierarchy.area}
+      [L5] Sub-Area: ${pickupHierarchy.subArea || 'N/A'}
+      [L6] Block: ${pickupHierarchy.block || 'N/A'}
+      [L7] Road / Instruction: ${pickupHierarchy.road || 'N/A'}
+  - Coordinates: ${pickupLat}, ${pickupLon}
+
+[2] LAST-MILE DELIVERY:
+  - Destination Hub: [${dHub?.code}] ${dHub?.name}
+  - Zone Status: ${dIsOut ? '⚠️ OUT OF ZONE (Nearest Last-Mile Hub Fallback - ' + deliveryResult.hubAssign?.distanceKm + ' km)' : '🟢 IN-ZONE DIRECT COVERAGE'}
+  - Administrative Hierarchy:
+      [L1] Division: ${deliveryHierarchy.division}
+      [L2] District: ${deliveryHierarchy.district}
+      [L3-A] Upazila: ${deliveryHierarchy.upazila || '(N/A - Metro Thana Area)'}
+      [L3-B] Thana: ${deliveryHierarchy.thana || '(N/A - Rural Upazila Area)'}
+      [L3-C] Ward/Union: ${deliveryHierarchy.wardUnion || '(Not Specified)'}
+      [L4] Area: ${deliveryHierarchy.area}
+      [L5] Sub-Area: ${deliveryHierarchy.subArea || 'N/A'}
+      [L6] Block: ${deliveryHierarchy.block || 'N/A'}
+      [L7] Road / Instruction: ${deliveryHierarchy.road || 'N/A'}
+  - Coordinates: ${deliveryLat}, ${deliveryLon}
+
+[3] TRANSIT & BILLING:
+  - Route: [${pHub?.code}] -> [TEJ-SORT-01 Linehaul Hub] -> [${dHub?.code}]
+  - Total Fee: ৳${totalRate} | SLA: ${(pIsOut || dIsOut) ? 'Extended Transit (+24h)' : 'Same-Day Express (<6h)'}
+================================================================`;
+        navigator.clipboard.writeText(text);
+        setCopiedWaybill(true);
+        setTimeout(() => setCopiedWaybill(false), 2200);
+      }
+
+      const totalDist = (pickupResult && deliveryResult)
+        ? getDistanceKm(pickupResult.loc.coords.lat, pickupResult.loc.coords.lon, deliveryResult.loc.coords.lat, deliveryResult.loc.coords.lon).toFixed(1)
+        : '0.0';
+
+      const pickupIsOut = pickupResult?.hubAssign?.isOutOfZone;
+      const deliveryIsOut = deliveryResult?.hubAssign?.isOutOfZone;
+
+      const isInterDistrict = pickupHierarchy.district && deliveryHierarchy.district && (pickupHierarchy.district !== deliveryHierarchy.district);
+
+      let baseCharge = 60;
+      if (isInterDistrict) {
+        baseCharge = 130;
+      } else if (deliverySpeed === 'express') {
+        baseCharge = 100;
+      } else {
+        baseCharge = 60;
+      }
+
+      const weightSurcharge = Math.max(0, Math.ceil(pkgWeight - 1)) * 20;
+      const pickupSurcharge = pickupIsOut ? 30 : 0;
+      const deliverySurcharge = deliveryIsOut ? 30 : 0;
+      const codFee = (codAmount && codAmount > 0) ? Math.round(codAmount * 0.01) : 0;
+
+      const totalConsignmentFee = baseCharge + weightSurcharge + pickupSurcharge + deliverySurcharge + codFee;
+      const netMerchantPayout = Math.max(0, (codAmount || 0) - totalConsignmentFee);
+
+      const pickupHasUpzOrThana = Boolean(pickupHierarchy.upazila || pickupHierarchy.thana);
+      const deliveryHasUpzOrThana = Boolean(deliveryHierarchy.upazila || deliveryHierarchy.thana);
+
+      return (
+        <div className="min-h-screen flex flex-col bg-slate-100 text-slate-800">
+          
+          {/* Top Navbar */}
+          <header className="bg-slate-900 text-white border-b border-slate-800 shadow-md sticky top-0 z-50">
+            <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center shadow-md shadow-emerald-500/20 font-black text-xl text-white">
+                  N
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <h1 className="font-extrabold text-lg tracking-tight">Nirapod Courier</h1>
+                    <span className="bg-emerald-500/20 text-emerald-400 text-[11px] font-semibold px-2 py-0.5 rounded-full border border-emerald-500/30">
+                      Smart Hub & Zone Routing Engine
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    City Area [L4] Dropdowns & Sub-Area [L5] Dual Input Engine (Manual + Dropdown)
+                  </p>
+                </div>
+              </div>
+
+              {/* Tab Selector */}
+              <div className="flex items-center space-x-2 bg-slate-800 p-1 rounded-xl border border-slate-700/80">
+                <button
+                  onClick={() => setActiveTab('router')}
+                  className={`text-xs font-bold px-3.5 py-1.5 rounded-lg transition ${
+                    activeTab === 'router' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  📦 Courier Router & Manifest
+                </button>
+                <button
+                  onClick={() => setActiveTab('inspector')}
+                  className={`text-xs font-bold px-3.5 py-1.5 rounded-lg transition ${
+                    activeTab === 'inspector' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  🔍 Single Coordinate Inspector
+                </button>
+              </div>
+            </div>
+          </header>
+
+          {/* Main Content Area */}
+          <main className="max-w-7xl mx-auto w-full p-4 md:p-6 space-y-6 flex-1">
+            
+            {activeTab === 'router' ? (
+              <div className="space-y-6">
+
+                {/* Hero / Scenario Control Banner */}
+                <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-teal-950 text-white rounded-3xl p-5 md:p-6 shadow-xl border border-emerald-500/30">
+                  <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+                    <div className="w-full lg:w-auto">
+                      <div className="flex items-center space-x-2">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/30 text-emerald-300 border border-emerald-400/40 uppercase tracking-wider">
+                          Enterprise Logistics Core
+                        </span>
+                        <span className="text-xs text-slate-400">Standard 7-Level Geographic Dispatch Architecture</span>
+                      </div>
+                      <h2 className="text-xl md:text-2xl font-black mt-1 tracking-tight text-white">
+                        Courier Hub Routing & Dispatch Operations Center
+                      </h2>
+                    </div>
+
+                    <button
+                      onClick={copyWaybillText}
+                      className={`shrink-0 font-bold text-xs px-4 py-2.5 rounded-xl transition shadow-md flex items-center space-x-2 ${
+                        copiedWaybill ? 'bg-emerald-500 text-white' : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                      }`}
+                    >
+                      <span>{copiedWaybill ? '✓ Manifest & Airway Bill Copied!' : '📄 Copy Airway Bill / Manifest'}</span>
+                    </button>
+                  </div>
+
+                  {/* Administrative & Geographic Hierarchy Metadata Bar */}
+                  <div className="bg-slate-900/90 border border-slate-700/80 rounded-2xl p-4 mb-4 space-y-3 shadow-inner">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+                      <div className="flex items-center space-x-2 text-xs">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span className="text-emerald-400 font-black uppercase tracking-wider text-[11px]">Metadata of Administrative & Courier Hierarchy:</span>
+                        <span className="text-slate-300 font-medium hidden sm:inline">National Geo-Relational Schema (BBS + OSM Indexed)</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[11px] font-mono">
+                        <span className="bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700 font-bold">33,894 Indexed Entities</span>
+                        <span className="bg-emerald-950/80 text-emerald-300 px-2 py-0.5 rounded border border-emerald-700/50 font-bold">100% Nationwide Coverage</span>
+                      </div>
+                    </div>
+
+                    {/* Level Flow Badges */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 text-center text-xs">
+                      <div className="bg-slate-800/90 border border-slate-700/80 rounded-xl p-2.5 hover:border-emerald-500/50 transition">
+                        <div className="text-[10px] font-black text-emerald-400 uppercase">[L1] Division</div>
+                        <div className="font-extrabold text-slate-100 text-sm mt-0.5">8 Divisions</div>
+                        <div className="text-[10px] text-slate-400">BBS Geocodes</div>
+                      </div>
+                      <div className="bg-slate-800/90 border border-slate-700/80 rounded-xl p-2.5 hover:border-emerald-500/50 transition">
+                        <div className="text-[10px] font-black text-emerald-400 uppercase">[L2] District</div>
+                        <div className="font-extrabold text-slate-100 text-sm mt-0.5">64 Zilas</div>
+                        <div className="text-[10px] text-slate-400">Metro & Rural</div>
+                      </div>
+                      <div className="bg-slate-800/90 border border-slate-700/80 rounded-xl p-2.5 hover:border-emerald-500/50 transition">
+                        <div className="text-[10px] font-black text-emerald-400 uppercase">[L3-A/B] Sub-Dist</div>
+                        <div className="font-extrabold text-slate-100 text-sm mt-0.5">495 Upz / 1,349 Thana</div>
+                        <div className="text-[10px] text-slate-400">One is Must</div>
+                      </div>
+                      <div className="bg-slate-800/90 border border-slate-700/80 rounded-xl p-2.5 hover:border-emerald-500/50 transition">
+                        <div className="text-[10px] font-black text-emerald-400 uppercase">[L3-C] Ward/Union</div>
+                        <div className="font-extrabold text-slate-100 text-sm mt-0.5">4,540 Unions / 54 Wards</div>
+                        <div className="text-[10px] text-slate-400">Grassroots Boundary</div>
+                      </div>
+                      <div className="bg-slate-800/90 border border-slate-700/80 rounded-xl p-2.5 hover:border-emerald-500/50 transition">
+                        <div className="text-[10px] font-black text-emerald-400 uppercase">[L4] Area</div>
+                        <div className="font-extrabold text-slate-100 text-sm mt-0.5">6,335 Localities</div>
+                        <div className="text-[10px] text-slate-400">Fixed City Zones</div>
+                      </div>
+                      <div className="bg-slate-800/90 border border-slate-700/80 rounded-xl p-2.5 hover:border-emerald-500/50 transition">
+                        <div className="text-[10px] font-black text-emerald-400 uppercase">[L5] Sub-Area</div>
+                        <div className="font-extrabold text-slate-100 text-sm mt-0.5">Dual Input</div>
+                        <div className="text-[10px] text-slate-400">Dropdown + Custom</div>
+                      </div>
+                      <div className="bg-slate-800/90 border border-slate-700/80 rounded-xl p-2.5 hover:border-emerald-500/50 transition">
+                        <div className="text-[10px] font-black text-emerald-400 uppercase">[L6-7] Doorstep</div>
+                        <div className="font-extrabold text-slate-100 text-sm mt-0.5">21,091 POIs</div>
+                        <div className="text-[10px] text-slate-400">Block, Road & Landmark</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Preset Scenarios Buttons */}
+                  <div className="pt-3 border-t border-slate-700/60">
+                    <span className="font-bold text-slate-400 uppercase text-[11px] block mb-2">
+                      Client Demonstration Scenarios (Click to test):
+                    </span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {DEMO_SCENARIOS.map((sc, i) => (
+                        <button
+                          key={i}
+                          onClick={() => applyScenario(sc)}
+                          className="text-left bg-slate-800/90 hover:bg-emerald-800/50 hover:border-emerald-400 border border-slate-700/80 p-2.5 rounded-xl transition text-xs group"
+                        >
+                          <div className="font-bold text-slate-200 group-hover:text-emerald-300">
+                            {sc.name}
+                          </div>
+                          <div className="text-[11px] text-slate-400 group-hover:text-slate-300 mt-0.5">
+                            {sc.desc}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* TWO-COLUMN CARDS: PICKUP vs DELIVERY */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                  {/* ===================== PICKUP CARD ===================== */}
+                  <div className={`bg-white rounded-3xl p-6 shadow-sm border-2 space-y-5 transition ${
+                    pickupIsOut ? 'border-amber-400 ring-2 ring-amber-400/20' : 'border-emerald-300'
+                  }`}>
+                    
+                    {/* Header */}
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                      <div className="flex items-center space-x-2.5">
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-white text-sm shadow-sm ${
+                          pickupIsOut ? 'bg-amber-600' : 'bg-emerald-600'
+                        }`}>
+                          P
+                        </div>
+                        <div>
+                          <div className="flex items-center space-x-2">
+                            <h3 className="font-extrabold text-slate-900 text-base">1. Pickup Location (First Mile)</h3>
+                          </div>
+                          <p className="text-xs text-slate-400">Consignor Origin Point</p>
+                        </div>
+                      </div>
+                      
+                      {pickupIsOut ? (
+                        <span className="text-[11px] font-black bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-1 rounded-lg animate-pulse">
+                          ⚠️ OUT OF ZONE (Feeder Fallback)
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded-lg">
+                          🟢 IN-ZONE DIRECT
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Coordinates Inputs */}
+                    <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                          🌐 GPS Coordinates (Lat & Lon)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => syncHierarchyFromCoords(true)}
+                          className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 underline"
+                        >
+                          Auto-populate hierarchy from GPS
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-500 block mb-0.5">Pickup Latitude</label>
+                          <input
+                            type="number"
+                            step="any"
+                            value={pickupLat}
+                            onChange={(e) => setPickupLat(e.target.value)}
+                            className="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-xl font-mono focus:ring-2 focus:ring-emerald-500 font-bold"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-500 block mb-0.5">Pickup Longitude</label>
+                          <input
+                            type="number"
+                            step="any"
+                            value={pickupLon}
+                            onChange={(e) => setPickupLon(e.target.value)}
+                            className="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-xl font-mono focus:ring-2 focus:ring-emerald-500 font-bold"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Level-Numbered Input Hierarchy */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center space-x-1.5">
+                          <span>📍 Location Hierarchy (Levels 1 to 7)</span>
+                        </h4>
+                        
+                        {pickupHasUpzOrThana ? (
+                          <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full border border-emerald-300">
+                            ✓ {pickupHierarchy.thana ? `[L3-B] Thana: ${pickupHierarchy.thana}` : `[L3-A] Upazila: ${pickupHierarchy.upazila}`}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] bg-rose-100 text-rose-700 font-bold px-2 py-0.5 rounded-full border border-rose-300 animate-bounce">
+                            ⚠️ Select Upazila OR Thana (Must)
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="space-y-2 text-xs">
+                        
+                        {/* [L1] Division Dropdown */}
+                        <div className="flex items-center gap-2">
+                          <span className="w-28 text-[11px] font-bold text-slate-700 shrink-0 flex items-center gap-1.5">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-slate-200 text-slate-800">L1</span>
+                            <span>Division:</span>
+                          </span>
+                          <select
+                            value={pickupHierarchy.division}
+                            onChange={(e) => {
+                              const newDiv = e.target.value;
+                              const firstDist = getDistrictsForDivision(newDiv)[0] || 'Dhaka';
+                              setPickupHierarchy({
+                                ...pickupHierarchy,
+                                division: newDiv,
+                                district: firstDist,
+                                upazila: "",
+                                thana: getThanasForDistrict(firstDist)[0] || "",
+                                area: getAvailableCityAreas(firstDist)[0] || "Mirpur",
+                                subArea: "",
+                                wardUnion: ""
+                              });
+                            }}
+                            className="flex-1 px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold focus:bg-white focus:ring-1 focus:ring-emerald-500"
+                          >
+                            {divisionList.map((d, idx) => (
+                              <option key={idx} value={d}>{d}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* [L2] District Dropdown */}
+                        <div className="flex items-center gap-2">
+                          <span className="w-28 text-[11px] font-bold text-slate-700 shrink-0 flex items-center gap-1.5">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-slate-200 text-slate-800">L2</span>
+                            <span>District:</span>
+                          </span>
+                          <select
+                            value={pickupHierarchy.district}
+                            onChange={(e) => {
+                              const newDist = e.target.value;
+                              setPickupHierarchy({
+                                ...pickupHierarchy,
+                                district: newDist,
+                                upazila: "",
+                                thana: getThanasForDistrict(newDist)[0] || "",
+                                area: getAvailableCityAreas(newDist)[0] || "Mirpur",
+                                subArea: "",
+                                wardUnion: ""
+                              });
+                            }}
+                            className="flex-1 px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold focus:bg-white focus:ring-1 focus:ring-emerald-500"
+                          >
+                            {getDistrictsForDivision(pickupHierarchy.division).map((dist, idx) => (
+                              <option key={idx} value={dist}>{dist}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* [L3] REQUIRED BRACKET FOR UPAZILA OR THANA */}
+                        <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-2 mt-1">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="font-black text-slate-700 uppercase tracking-tight flex items-center gap-1.5">
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-emerald-200 text-emerald-900">L3</span>
+                              <span>Administrative Entity (One is Must):</span>
+                            </span>
+                            <span className="text-[10px] text-slate-500 italic">Upazila (Rural) OR Thana (Metro)</span>
+                          </div>
+
+                          {/* [L3-A] Upazila Dropdown */}
+                          <div className="flex items-center gap-2">
+                            <span className="w-28 text-[11px] font-bold text-slate-700 shrink-0 flex items-center gap-1.5">
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-slate-200 text-slate-700">L3-A</span>
+                              <span>Upazila:</span>
+                            </span>
+                            <select
+                              value={pickupHierarchy.upazila}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setPickupHierarchy({
+                                  ...pickupHierarchy,
+                                  upazila: val,
+                                  thana: val ? "" : pickupHierarchy.thana,
+                                  wardUnion: ""
+                                });
+                              }}
+                              className={`flex-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border ${
+                                pickupHierarchy.upazila ? 'bg-white border-emerald-500 ring-1 ring-emerald-500 font-bold' : 'bg-white border-slate-300'
+                              }`}
+                            >
+                              <option value="">-- None / Select Upazila (if rural/suburban) --</option>
+                              {getUpazilasForDistrict(pickupHierarchy.district).map((u, idx) => (
+                                <option key={idx} value={u}>{u} Upazila</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* [L3-B] Thana Dropdown */}
+                          <div className="flex items-center gap-2">
+                            <span className="w-28 text-[11px] font-bold text-slate-700 shrink-0 flex items-center gap-1.5">
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-slate-200 text-slate-700">L3-B</span>
+                              <span>Thana:</span>
+                            </span>
+                            <select
+                              value={pickupHierarchy.thana}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setPickupHierarchy({
+                                  ...pickupHierarchy,
+                                  thana: val,
+                                  upazila: val ? "" : pickupHierarchy.upazila,
+                                  area: val || pickupHierarchy.area,
+                                  wardUnion: ""
+                                });
+                              }}
+                              className={`flex-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border ${
+                                pickupHierarchy.thana ? 'bg-white border-emerald-500 ring-1 ring-emerald-500 font-bold' : 'bg-white border-slate-300'
+                              }`}
+                            >
+                              <option value="">-- None / Select Thana (if city/metro) --</option>
+                              {getThanasForDistrict(pickupHierarchy.district).map((t, idx) => (
+                                <option key={idx} value={t}>{t} Thana</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* [L3-C] Ward / Union Dropdown / Input */}
+                        <div className="flex items-center gap-2">
+                          <span className="w-28 text-[11px] font-bold text-slate-700 shrink-0 flex items-center gap-1.5">
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-slate-200 text-slate-700">L3-C</span>
+                            <span>Ward / Union:</span>
+                            <span className="text-[9px] bg-slate-200 text-slate-500 px-1 rounded font-normal">opt</span>
+                          </span>
+                          <input
+                            type="text"
+                            list="pickup-unions-list"
+                            value={pickupHierarchy.wardUnion}
+                            onChange={(e) => setPickupHierarchy({ ...pickupHierarchy, wardUnion: e.target.value })}
+                            placeholder={pickupHierarchy.upazila ? `Pick Union for ${pickupHierarchy.upazila}...` : "e.g. Ward 10, Union name"}
+                            className="flex-1 px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold focus:bg-white focus:ring-1 focus:ring-emerald-500"
+                          />
+                          <datalist id="pickup-unions-list">
+                            {pickupHierarchy.upazila && getUnionsForUpazila(pickupHierarchy.upazila, pickupHierarchy.district).map((un, idx) => (
+                              <option key={idx} value={`${un} Union`} />
+                            ))}
+                            {METRO_WARDS.map((w, idx) => (
+                              <option key={idx} value={w} />
+                            ))}
+                          </datalist>
+                        </div>
+
+                        {/* [L4] Area Dropdown (Fixed City Commercial Zones: Mirpur, Dhanmondi, Badda, Uttara...) */}
+                        <div className="flex items-center gap-2">
+                          <span className="w-28 text-[11px] font-bold text-slate-700 shrink-0 flex items-center gap-1.5">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-indigo-200 text-indigo-900">L4</span>
+                            <span>Area / Locality:</span>
+                          </span>
+                          <select
+                            value={pickupHierarchy.area}
+                            onChange={(e) => {
+                              const newArea = e.target.value;
+                              const availableSubs = getAvailableSubAreas(newArea, pickupHierarchy.district);
+                              setPickupHierarchy({
+                                ...pickupHierarchy,
+                                area: newArea,
+                                subArea: availableSubs[0] || ""
+                              });
+                            }}
+                            className="flex-1 px-2.5 py-1.5 bg-white border border-indigo-300 rounded-lg text-xs font-bold text-indigo-950 focus:ring-2 focus:ring-indigo-500"
+                          >
+                            {getAvailableCityAreas(pickupHierarchy.district).map((a, idx) => (
+                              <option key={idx} value={a}>{a}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* [L5] Sub-Area: DUAL INPUT (Dropdown + Manual Input) */}
+                        <div className="flex items-center gap-2">
+                          <span className="w-28 text-[11px] font-bold text-slate-700 shrink-0 flex items-center gap-1.5">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-indigo-200 text-indigo-900">L5</span>
+                            <span>Sub-Area:</span>
+                          </span>
+                          
+                          <div className="flex-1 flex gap-1.5">
+                            {/* Manual Text Input with Datalist */}
+                            <input
+                              type="text"
+                              list="pickup-subarea-list"
+                              value={pickupHierarchy.subArea}
+                              onChange={(e) => setPickupHierarchy({ ...pickupHierarchy, subArea: e.target.value })}
+                              placeholder="Type or pick from dropdown..."
+                              className="flex-1 px-2.5 py-1.5 bg-white border border-indigo-300 rounded-lg text-xs font-semibold text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-indigo-500"
+                            />
+                            
+                            {/* Datalist for autocomplete */}
+                            <datalist id="pickup-subarea-list">
+                              {getAvailableSubAreas(pickupHierarchy.area, pickupHierarchy.district).map((sub, idx) => (
+                                <option key={idx} value={sub} />
+                              ))}
+                            </datalist>
+
+                            {/* Companion Dropdown Selector */}
+                            <select
+                              value=""
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  setPickupHierarchy({ ...pickupHierarchy, subArea: e.target.value });
+                                }
+                              }}
+                              className="w-32 px-1.5 py-1.5 bg-slate-100 border border-slate-300 rounded-lg text-[11px] font-semibold text-slate-700 hover:bg-slate-200"
+                            >
+                              <option value="">▼ Pick Section</option>
+                              {getAvailableSubAreas(pickupHierarchy.area, pickupHierarchy.district).map((sub, idx) => (
+                                <option key={idx} value={sub}>{sub}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* [L6] Block (Optional) */}
+                        <div className="flex items-center gap-2">
+                          <span className="w-28 text-[11px] font-bold text-slate-700 shrink-0 flex items-center gap-1.5">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-slate-200 text-slate-700">L6</span>
+                            <span>Block:</span>
+                            <span className="text-[9px] bg-slate-200 text-slate-500 px-1 rounded font-normal">opt</span>
+                          </span>
+                          <input
+                            type="text"
+                            value={pickupHierarchy.block}
+                            onChange={(e) => setPickupHierarchy({ ...pickupHierarchy, block: e.target.value })}
+                            placeholder="e.g. Block C, Block B (Optional)"
+                            className="flex-1 px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 placeholder-slate-400 focus:bg-white focus:ring-1 focus:ring-emerald-500"
+                          />
+                        </div>
+
+                        {/* [L7] Road / Landmark / Delivery Instruction */}
+                        <div className="flex items-center gap-2">
+                          <span className="w-28 text-[11px] font-bold text-slate-700 shrink-0 flex items-center gap-1.5">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-slate-200 text-slate-700">L7</span>
+                            <span>Instruction/Road:</span>
+                            <span className="text-[9px] bg-slate-200 text-slate-500 px-1 rounded font-normal">opt</span>
+                          </span>
+                          <input
+                            type="text"
+                            value={pickupHierarchy.road}
+                            onChange={(e) => setPickupHierarchy({ ...pickupHierarchy, road: e.target.value })}
+                            placeholder="e.g. Mirpur Stadium Gate 2, Hope School, Road 19"
+                            className="flex-1 px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 placeholder-slate-400 focus:bg-white focus:ring-1 focus:ring-emerald-500"
+                          />
+                        </div>
+
+                      </div>
+
+                      <div className="flex justify-end pt-1">
+                        <button
+                          type="button"
+                          onClick={() => syncCoordsFromHierarchy(true)}
+                          className="text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-2.5 py-1 rounded-lg border border-slate-300 flex items-center gap-1"
+                        >
+                          <span>🧭 Sync GPS from Address</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Resolved Location Output */}
+                    {pickupResult && (
+                      <div className="space-y-3 pt-2">
+                        
+                        <div className="bg-slate-50 rounded-2xl p-3.5 border border-slate-200">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
+                            Full Constructed Pickup Address:
+                          </span>
+                          <div className="font-extrabold text-slate-900 text-sm">
+                            {[
+                              pickupHierarchy.road,
+                              pickupHierarchy.block ? `Block: ${pickupHierarchy.block}` : null,
+                              pickupHierarchy.subArea,
+                              pickupHierarchy.area,
+                              pickupHierarchy.wardUnion,
+                              pickupHierarchy.thana ? `${pickupHierarchy.thana} Thana` : null,
+                              pickupHierarchy.upazila ? `${pickupHierarchy.upazila} Upazila` : null,
+                              pickupHierarchy.district
+                            ].filter(Boolean).join(', ')}
+                          </div>
+                          <div className="text-xs text-emerald-700 bangla-text font-bold mt-1">
+                            {pickupResult.loc.humanReadableAddressBn}
+                          </div>
+                        </div>
+
+                        {/* AUTO-ASSIGNED HUB CARD */}
+                        <div className={`rounded-2xl p-4.5 border-2 shadow-sm space-y-2.5 ${
+                          pickupIsOut
+                            ? 'bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100/60 border-amber-500 text-amber-950'
+                            : 'bg-gradient-to-br from-emerald-50 via-teal-50/70 to-emerald-100/50 border-emerald-500 text-emerald-950'
+                        }`}>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black uppercase tracking-wider flex items-center space-x-1.5">
+                              <span className={`w-2.5 h-2.5 rounded-full ${pickupIsOut ? 'bg-amber-600 animate-ping' : 'bg-emerald-600'}`}></span>
+                              <span>{pickupIsOut ? 'Auto-Assigned Nearest First-Mile Hub' : 'Auto-Assigned Origin Hub'}</span>
+                            </span>
+                            <span className={`font-mono font-black text-xs px-2.5 py-1 rounded-lg text-white shadow-xs ${
+                              pickupIsOut ? 'bg-amber-600' : 'bg-emerald-600'
+                            }`}>
+                              {pickupResult.hubAssign?.hub.code}
+                            </span>
+                          </div>
+
+                          <div className="text-lg font-black">
+                            {pickupResult.hubAssign?.hub.name}
+                          </div>
+                          
+                          <p className="text-xs opacity-90">
+                            📍 {pickupResult.hubAssign?.hub.address}
+                          </p>
+
+                          <div className="p-2.5 rounded-xl bg-white/70 border border-slate-200/60 text-xs space-y-1">
+                            <div className="font-semibold text-slate-800">
+                              Dispatch Rule: <span className="font-bold text-slate-900">{pickupResult.hubAssign?.rule}</span>
+                            </div>
+                            <div className="text-[11px] text-slate-600">
+                              {pickupResult.hubAssign?.dispatchNote}
+                            </div>
+                            <div className="text-[11px] font-bold text-emerald-700 pt-0.5">
+                              Pickup Distance to Hub: {pickupResult.hubAssign?.distanceKm} km | Rider: {pickupResult.hubAssign?.hub.rider}
+                            </div>
+                          </div>
+                        </div>
+
+                      </div>
+                    )}
+
+                  </div>
+
+                  {/* ===================== DELIVERY CARD ===================== */}
+                  <div className={`bg-white rounded-3xl p-6 shadow-sm border-2 space-y-5 transition ${
+                    deliveryIsOut ? 'border-amber-400 ring-2 ring-amber-400/20' : 'border-sky-300'
+                  }`}>
+                    
+                    {/* Header */}
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                      <div className="flex items-center space-x-2.5">
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-white text-sm shadow-sm ${
+                          deliveryIsOut ? 'bg-amber-600' : 'bg-sky-600'
+                        }`}>
+                          D
+                        </div>
+                        <div>
+                          <div className="flex items-center space-x-2">
+                            <h3 className="font-extrabold text-slate-900 text-base">2. Delivery Location (Last Mile)</h3>
+                          </div>
+                          <p className="text-xs text-slate-400">Recipient Destination</p>
+                        </div>
+                      </div>
+                      
+                      {deliveryIsOut ? (
+                        <span className="text-[11px] font-black bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-1 rounded-lg animate-pulse">
+                          ⚠️ OUT OF ZONE (Last Mile Fallback)
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-bold bg-sky-50 text-sky-800 border border-sky-200 px-2.5 py-1 rounded-lg">
+                          🟢 IN-ZONE DIRECT
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Coordinates Inputs */}
+                    <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                          🌐 GPS Coordinates (Lat & Lon)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => syncHierarchyFromCoords(false)}
+                          className="text-[11px] font-semibold text-sky-700 hover:text-sky-800 underline"
+                        >
+                          Auto-populate hierarchy from GPS
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-500 block mb-0.5">Delivery Latitude</label>
+                          <input
+                            type="number"
+                            step="any"
+                            value={deliveryLat}
+                            onChange={(e) => setDeliveryLat(e.target.value)}
+                            className="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-xl font-mono focus:ring-2 focus:ring-sky-500 font-bold"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-500 block mb-0.5">Delivery Longitude</label>
+                          <input
+                            type="number"
+                            step="any"
+                            value={deliveryLon}
+                            onChange={(e) => setDeliveryLon(e.target.value)}
+                            className="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-xl font-mono focus:ring-2 focus:ring-sky-500 font-bold"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Level-Numbered Input Hierarchy */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center space-x-1.5">
+                          <span>📍 Location Hierarchy (Levels 1 to 7)</span>
+                        </h4>
+                        
+                        {deliveryHasUpzOrThana ? (
+                          <span className="text-[10px] bg-sky-100 text-sky-800 font-bold px-2 py-0.5 rounded-full border border-sky-300">
+                            ✓ {deliveryHierarchy.thana ? `[L3-B] Thana: ${deliveryHierarchy.thana}` : `[L3-A] Upazila: ${deliveryHierarchy.upazila}`}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] bg-rose-100 text-rose-700 font-bold px-2 py-0.5 rounded-full border border-rose-300 animate-bounce">
+                            ⚠️ Select Upazila OR Thana (Must)
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="space-y-2 text-xs">
+                        
+                        {/* [L1] Division Dropdown */}
+                        <div className="flex items-center gap-2">
+                          <span className="w-28 text-[11px] font-bold text-slate-700 shrink-0 flex items-center gap-1.5">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-slate-200 text-slate-800">L1</span>
+                            <span>Division:</span>
+                          </span>
+                          <select
+                            value={deliveryHierarchy.division}
+                            onChange={(e) => {
+                              const newDiv = e.target.value;
+                              const firstDist = getDistrictsForDivision(newDiv)[0] || 'Dhaka';
+                              setDeliveryHierarchy({
+                                ...deliveryHierarchy,
+                                division: newDiv,
+                                district: firstDist,
+                                upazila: "",
+                                thana: getThanasForDistrict(firstDist)[0] || "",
+                                area: getAvailableCityAreas(firstDist)[0] || "Dhanmondi",
+                                subArea: "",
+                                wardUnion: ""
+                              });
+                            }}
+                            className="flex-1 px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold focus:bg-white focus:ring-1 focus:ring-sky-500"
+                          >
+                            {divisionList.map((d, idx) => (
+                              <option key={idx} value={d}>{d}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* [L2] District Dropdown */}
+                        <div className="flex items-center gap-2">
+                          <span className="w-28 text-[11px] font-bold text-slate-700 shrink-0 flex items-center gap-1.5">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-slate-200 text-slate-800">L2</span>
+                            <span>District:</span>
+                          </span>
+                          <select
+                            value={deliveryHierarchy.district}
+                            onChange={(e) => {
+                              const newDist = e.target.value;
+                              setDeliveryHierarchy({
+                                ...deliveryHierarchy,
+                                district: newDist,
+                                upazila: "",
+                                thana: getThanasForDistrict(newDist)[0] || "",
+                                area: getAvailableCityAreas(newDist)[0] || "Dhanmondi",
+                                subArea: "",
+                                wardUnion: ""
+                              });
+                            }}
+                            className="flex-1 px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold focus:bg-white focus:ring-1 focus:ring-sky-500"
+                          >
+                            {getDistrictsForDivision(deliveryHierarchy.division).map((dist, idx) => (
+                              <option key={idx} value={dist}>{dist}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* [L3] REQUIRED BRACKET FOR UPAZILA OR THANA */}
+                        <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-2 mt-1">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="font-black text-slate-700 uppercase tracking-tight flex items-center gap-1.5">
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-sky-200 text-sky-900">L3</span>
+                              <span>Administrative Entity (One is Must):</span>
+                            </span>
+                            <span className="text-[10px] text-slate-500 italic">Upazila (Rural) OR Thana (Metro)</span>
+                          </div>
+
+                          {/* [L3-A] Upazila Dropdown */}
+                          <div className="flex items-center gap-2">
+                            <span className="w-28 text-[11px] font-bold text-slate-700 shrink-0 flex items-center gap-1.5">
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-slate-200 text-slate-700">L3-A</span>
+                              <span>Upazila:</span>
+                            </span>
+                            <select
+                              value={deliveryHierarchy.upazila}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setDeliveryHierarchy({
+                                  ...deliveryHierarchy,
+                                  upazila: val,
+                                  thana: val ? "" : deliveryHierarchy.thana,
+                                  wardUnion: ""
+                                });
+                              }}
+                              className={`flex-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border ${
+                                deliveryHierarchy.upazila ? 'bg-white border-sky-500 ring-1 ring-sky-500 font-bold' : 'bg-white border-slate-300'
+                              }`}
+                            >
+                              <option value="">-- None / Select Upazila (if rural/suburban) --</option>
+                              {getUpazilasForDistrict(deliveryHierarchy.district).map((u, idx) => (
+                                <option key={idx} value={u}>{u} Upazila</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* [L3-B] Thana Dropdown */}
+                          <div className="flex items-center gap-2">
+                            <span className="w-28 text-[11px] font-bold text-slate-700 shrink-0 flex items-center gap-1.5">
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-slate-200 text-slate-700">L3-B</span>
+                              <span>Thana:</span>
+                            </span>
+                            <select
+                              value={deliveryHierarchy.thana}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setDeliveryHierarchy({
+                                  ...deliveryHierarchy,
+                                  thana: val,
+                                  upazila: val ? "" : deliveryHierarchy.upazila,
+                                  area: val || deliveryHierarchy.area,
+                                  wardUnion: ""
+                                });
+                              }}
+                              className={`flex-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border ${
+                                deliveryHierarchy.thana ? 'bg-white border-sky-500 ring-1 ring-sky-500 font-bold' : 'bg-white border-slate-300'
+                              }`}
+                            >
+                              <option value="">-- None / Select Thana (if city/metro) --</option>
+                              {getThanasForDistrict(deliveryHierarchy.district).map((t, idx) => (
+                                <option key={idx} value={t}>{t} Thana</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* [L3-C] Ward / Union Dropdown / Input */}
+                        <div className="flex items-center gap-2">
+                          <span className="w-28 text-[11px] font-bold text-slate-700 shrink-0 flex items-center gap-1.5">
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-slate-200 text-slate-700">L3-C</span>
+                            <span>Ward / Union:</span>
+                            <span className="text-[9px] bg-slate-200 text-slate-500 px-1 rounded font-normal">opt</span>
+                          </span>
+                          <input
+                            type="text"
+                            list="delivery-unions-list"
+                            value={deliveryHierarchy.wardUnion}
+                            onChange={(e) => setDeliveryHierarchy({ ...deliveryHierarchy, wardUnion: e.target.value })}
+                            placeholder={deliveryHierarchy.upazila ? `Pick Union for ${deliveryHierarchy.upazila}...` : "e.g. Ward 15, Union name"}
+                            className="flex-1 px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold focus:bg-white focus:ring-1 focus:ring-sky-500"
+                          />
+                          <datalist id="delivery-unions-list">
+                            {deliveryHierarchy.upazila && getUnionsForUpazila(deliveryHierarchy.upazila, deliveryHierarchy.district).map((un, idx) => (
+                              <option key={idx} value={`${un} Union`} />
+                            ))}
+                            {METRO_WARDS.map((w, idx) => (
+                              <option key={idx} value={w} />
+                            ))}
+                          </datalist>
+                        </div>
+
+                        {/* [L4] Area Dropdown (Fixed City Commercial Zones: Dhanmondi, Mirpur, Badda, Uttara...) */}
+                        <div className="flex items-center gap-2">
+                          <span className="w-28 text-[11px] font-bold text-slate-700 shrink-0 flex items-center gap-1.5">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-indigo-200 text-indigo-900">L4</span>
+                            <span>Area / Locality:</span>
+                          </span>
+                          <select
+                            value={deliveryHierarchy.area}
+                            onChange={(e) => {
+                              const newArea = e.target.value;
+                              const availableSubs = getAvailableSubAreas(newArea, deliveryHierarchy.district);
+                              setDeliveryHierarchy({
+                                ...deliveryHierarchy,
+                                area: newArea,
+                                subArea: availableSubs[0] || ""
+                              });
+                            }}
+                            className="flex-1 px-2.5 py-1.5 bg-white border border-indigo-300 rounded-lg text-xs font-bold text-indigo-950 focus:ring-2 focus:ring-indigo-500"
+                          >
+                            {getAvailableCityAreas(deliveryHierarchy.district).map((a, idx) => (
+                              <option key={idx} value={a}>{a}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* [L5] Sub-Area: DUAL INPUT (Dropdown + Manual Input) */}
+                        <div className="flex items-center gap-2">
+                          <span className="w-28 text-[11px] font-bold text-slate-700 shrink-0 flex items-center gap-1.5">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-indigo-200 text-indigo-900">L5</span>
+                            <span>Sub-Area:</span>
+                          </span>
+                          
+                          <div className="flex-1 flex gap-1.5">
+                            {/* Manual Text Input with Datalist */}
+                            <input
+                              type="text"
+                              list="delivery-subarea-list"
+                              value={deliveryHierarchy.subArea}
+                              onChange={(e) => setDeliveryHierarchy({ ...deliveryHierarchy, subArea: e.target.value })}
+                              placeholder="Type or pick from dropdown..."
+                              className="flex-1 px-2.5 py-1.5 bg-white border border-indigo-300 rounded-lg text-xs font-semibold text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-indigo-500"
+                            />
+                            
+                            {/* Datalist for autocomplete */}
+                            <datalist id="delivery-subarea-list">
+                              {getAvailableSubAreas(deliveryHierarchy.area, deliveryHierarchy.district).map((sub, idx) => (
+                                <option key={idx} value={sub} />
+                              ))}
+                            </datalist>
+
+                            {/* Companion Dropdown Selector */}
+                            <select
+                              value=""
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  setDeliveryHierarchy({ ...deliveryHierarchy, subArea: e.target.value });
+                                }
+                              }}
+                              className="w-32 px-1.5 py-1.5 bg-slate-100 border border-slate-300 rounded-lg text-[11px] font-semibold text-slate-700 hover:bg-slate-200"
+                            >
+                              <option value="">▼ Pick Section</option>
+                              {getAvailableSubAreas(deliveryHierarchy.area, deliveryHierarchy.district).map((sub, idx) => (
+                                <option key={idx} value={sub}>{sub}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* [L6] Block (Optional) */}
+                        <div className="flex items-center gap-2">
+                          <span className="w-28 text-[11px] font-bold text-slate-700 shrink-0 flex items-center gap-1.5">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-slate-200 text-slate-700">L6</span>
+                            <span>Block:</span>
+                            <span className="text-[9px] bg-slate-200 text-slate-500 px-1 rounded font-normal">opt</span>
+                          </span>
+                          <input
+                            type="text"
+                            value={deliveryHierarchy.block}
+                            onChange={(e) => setDeliveryHierarchy({ ...deliveryHierarchy, block: e.target.value })}
+                            placeholder="e.g. Block C, Block B (Optional)"
+                            className="flex-1 px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 placeholder-slate-400 focus:bg-white focus:ring-1 focus:ring-sky-500"
+                          />
+                        </div>
+
+                        {/* [L7] Road / Landmark / Delivery Instruction */}
+                        <div className="flex items-center gap-2">
+                          <span className="w-28 text-[11px] font-bold text-slate-700 shrink-0 flex items-center gap-1.5">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-slate-200 text-slate-700">L7</span>
+                            <span>Instruction/Road:</span>
+                            <span className="text-[9px] bg-slate-200 text-slate-500 px-1 rounded font-normal">opt</span>
+                          </span>
+                          <input
+                            type="text"
+                            value={deliveryHierarchy.road}
+                            onChange={(e) => setDeliveryHierarchy({ ...deliveryHierarchy, road: e.target.value })}
+                            placeholder="e.g. House 34, Road 27, Rapa Plaza"
+                            className="flex-1 px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 placeholder-slate-400 focus:bg-white focus:ring-1 focus:ring-sky-500"
+                          />
+                        </div>
+
+                      </div>
+
+                      <div className="flex justify-end pt-1">
+                        <button
+                          type="button"
+                          onClick={() => syncCoordsFromHierarchy(false)}
+                          className="text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-2.5 py-1 rounded-lg border border-slate-300 flex items-center gap-1"
+                        >
+                          <span>🧭 Sync GPS from Address</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Resolved Location Output */}
+                    {deliveryResult && (
+                      <div className="space-y-3 pt-2">
+                        
+                        <div className="bg-slate-50 rounded-2xl p-3.5 border border-slate-200">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
+                            Full Constructed Delivery Address:
+                          </span>
+                          <div className="font-extrabold text-slate-900 text-sm">
+                            {[
+                              deliveryHierarchy.road,
+                              deliveryHierarchy.block ? `Block: ${deliveryHierarchy.block}` : null,
+                              deliveryHierarchy.subArea,
+                              deliveryHierarchy.area,
+                              deliveryHierarchy.wardUnion,
+                              deliveryHierarchy.thana ? `${deliveryHierarchy.thana} Thana` : null,
+                              deliveryHierarchy.upazila ? `${deliveryHierarchy.upazila} Upazila` : null,
+                              deliveryHierarchy.district
+                            ].filter(Boolean).join(', ')}
+                          </div>
+                          <div className="text-xs text-sky-700 bangla-text font-bold mt-1">
+                            {deliveryResult.loc.humanReadableAddressBn}
+                          </div>
+                        </div>
+
+                        {/* AUTO-ASSIGNED HUB CARD */}
+                        <div className={`rounded-2xl p-4.5 border-2 shadow-sm space-y-2.5 ${
+                          deliveryIsOut
+                            ? 'bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100/60 border-amber-500 text-amber-950'
+                            : 'bg-gradient-to-br from-sky-50 via-indigo-50/70 to-sky-100/50 border-sky-500 text-sky-950'
+                        }`}>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black uppercase tracking-wider flex items-center space-x-1.5">
+                              <span className={`w-2.5 h-2.5 rounded-full ${deliveryIsOut ? 'bg-amber-600 animate-ping' : 'bg-sky-600'}`}></span>
+                              <span>{deliveryIsOut ? 'Auto-Assigned Nearest Last-Mile Hub' : 'Auto-Assigned Delivery Hub'}</span>
+                            </span>
+                            <span className={`font-mono font-black text-xs px-2.5 py-1 rounded-lg text-white shadow-xs ${
+                              deliveryIsOut ? 'bg-amber-600' : 'bg-sky-600'
+                            }`}>
+                              {deliveryResult.hubAssign?.hub.code}
+                            </span>
+                          </div>
+
+                          <div className="text-lg font-black">
+                            {deliveryResult.hubAssign?.hub.name}
+                          </div>
+                          
+                          <p className="text-xs opacity-90">
+                            📍 {deliveryResult.hubAssign?.hub.address}
+                          </p>
+
+                          <div className="p-2.5 rounded-xl bg-white/70 border border-slate-200/60 text-xs space-y-1">
+                            <div className="font-semibold text-slate-800">
+                              Dispatch Rule: <span className="font-bold text-slate-900">{deliveryResult.hubAssign?.rule}</span>
+                            </div>
+                            <div className="text-[11px] text-slate-600">
+                              {deliveryResult.hubAssign?.dispatchNote}
+                            </div>
+                            <div className="text-[11px] font-bold text-sky-700 pt-0.5">
+                              Delivery Distance from Hub: {deliveryResult.hubAssign?.distanceKm} km | Rider: {deliveryResult.hubAssign?.hub.rider}
+                            </div>
+                          </div>
+                        </div>
+
+                      </div>
+                    )}
+
+                  </div>
+
+                </div>
+
+                {/* DYNAMIC COURIER LOGISTICS TRANSIT CHAIN & PRICING MANIFEST */}
+                {pickupResult && deliveryResult && (
+                  <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-6">
+                    
+                    {/* Header */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
+                          <h3 className="font-black text-slate-900 text-lg">
+                            Courier Logistics Transit Chain & Pricing Manifest
+                          </h3>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          Consignment: <strong className="text-slate-800 font-mono">NC-2026-{pickupResult.hubAssign?.hub.code}-{deliveryResult.hubAssign?.hub.code}</strong> | Distance: <strong className="text-emerald-600 font-mono">{totalDist} km</strong>
+                        </p>
+                      </div>
+
+                      {/* SLA and Billing Badges */}
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className={`px-3 py-1.5 rounded-xl font-bold border ${
+                          (pickupIsOut || deliveryIsOut)
+                            ? 'bg-amber-50 text-amber-900 border-amber-300'
+                            : 'bg-emerald-50 text-emerald-900 border-emerald-300'
+                        }`}>
+                          SLA: {(pickupIsOut || deliveryIsOut) ? 'Extended Feeder (+24h)' : (deliverySpeed === 'express' ? '⚡ Flash Same-Day (<6h)' : 'Standard Next-Day (24h)')}
+                        </span>
+
+                        <span className="bg-emerald-600 text-white px-4 py-1.5 rounded-xl font-black text-sm shadow-sm">
+                          Total Fee: ৳{totalConsignmentFee}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* DYNAMIC DISPATCH SIMULATOR CONTROLS */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1.5 flex items-center justify-between">
+                          <span>📦 Consignment Weight:</span>
+                          <span className="font-mono text-emerald-700 font-black">{pkgWeight} kg</span>
+                        </label>
+                        <div className="flex items-center space-x-1.5">
+                          {[0.5, 1, 2, 5, 10].map(w => (
+                            <button
+                              key={w}
+                              type="button"
+                              onClick={() => setPkgWeight(w)}
+                              className={`px-2.5 py-1 rounded-lg font-bold transition border ${
+                                pkgWeight === w ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                              }`}
+                            >
+                              {w}kg
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1.5">
+                          ⚡ Delivery Service Tier:
+                        </label>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setDeliverySpeed('standard')}
+                            className={`py-1 px-2 rounded-lg font-bold border transition text-center ${
+                              deliverySpeed === 'standard' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                            }`}
+                          >
+                            🚚 Standard (৳60)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeliverySpeed('express')}
+                            className={`py-1 px-2 rounded-lg font-bold border transition text-center ${
+                              deliverySpeed === 'express' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                            }`}
+                          >
+                            ⚡ Express (৳100)
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1.5 flex items-center justify-between">
+                          <span>💵 Cash on Delivery (COD):</span>
+                          <span className="font-mono text-slate-500 font-semibold">1% Fee: ৳{codFee}</span>
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-2 text-slate-400 font-bold">৳</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="100"
+                            value={codAmount}
+                            onChange={(e) => setCodAmount(Number(e.target.value))}
+                            className="w-full pl-7 pr-3 py-1.5 bg-white border border-slate-300 rounded-lg font-mono font-bold text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Surcharge Note if Out of Zone */}
+                    {(pickupIsOut || deliveryIsOut) ? (
+                      <div className="bg-amber-50/90 border border-amber-300 rounded-2xl p-4 text-xs text-amber-950 flex flex-wrap items-center justify-between gap-3">
+                        <div className="space-y-0.5">
+                          <strong className="font-black uppercase text-[11px] text-amber-900 flex items-center gap-1.5">
+                            <span>⚠️ Out-of-Zone Dispatch Surcharges Applied:</span>
+                          </strong>
+                          <p className="text-amber-800">
+                            Points outside primary metro hub zones are automatically linked to the nearest operational first-mile / last-mile hubs with feeder routing.
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 font-mono font-bold text-xs bg-white px-3 py-1.5 rounded-xl border border-amber-200 shadow-2xs">
+                          <span>Base: ৳{baseCharge}</span>
+                          {pickupIsOut && <span className="text-amber-700">+ Feeder Pick: ৳30</span>}
+                          {deliveryIsOut && <span className="text-amber-700">+ Feeder Drop: ৳30</span>}
+                          {weightSurcharge > 0 && <span className="text-slate-600">+ Weight: ৳{weightSurcharge}</span>}
+                          {codFee > 0 && <span className="text-slate-600">+ COD: ৳{codFee}</span>}
+                          <span className="text-emerald-700 font-black">= ৳{totalConsignmentFee}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-3 text-xs text-emerald-900 flex items-center justify-between">
+                        <span className="font-semibold flex items-center gap-1.5">
+                          <span>🟢 Core Metropolitan Coverage:</span> Both origin and destination are inside primary hub dispatch zones.
+                        </span>
+                        <span className="font-mono font-bold text-emerald-800">0 km Feeder Penalty</span>
+                      </div>
+                    )}
+
+                    {/* 5-Step Visual Logistics Transit Chain */}
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-3 relative">
+                      
+                      {/* Step 1: Origin */}
+                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-center space-y-1 relative">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase block">1. Origin Collection</span>
+                        <div className="font-black text-xs text-slate-800 truncate" title={pickupHierarchy.area}>
+                          {pickupHierarchy.subArea ? `${pickupHierarchy.area} (${pickupHierarchy.subArea})` : pickupHierarchy.area}
+                        </div>
+                        <p className="text-[10px] text-slate-500 truncate">{pickupHierarchy.road || 'Doorstep Pickup'}</p>
+                        <span className={`text-[10px] font-bold block mt-1 py-0.5 px-2 rounded-full ${
+                          pickupIsOut ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                        }`}>
+                          {pickupIsOut ? '🛵 Feeder Rider Leg' : '🛵 Direct Hub Rider'}
+                        </span>
+                      </div>
+
+                      {/* Step 2: First-Mile Hub */}
+                      <div className={`p-4 rounded-2xl border-2 text-center space-y-1 shadow-sm ${
+                        pickupIsOut ? 'bg-amber-50 border-amber-400' : 'bg-emerald-50 border-emerald-400'
+                      }`}>
+                        <span className="text-[10px] font-bold uppercase block text-slate-600">
+                          {pickupIsOut ? '2. Nearest First-Mile Hub' : '2. Origin Primary Hub'}
+                        </span>
+                        <div className="font-black text-sm text-slate-900 font-mono">
+                          [{pickupResult.hubAssign?.hub.code}]
+                        </div>
+                        <span className="text-[11px] font-bold text-slate-700 block truncate">
+                          {pickupResult.hubAssign?.hub.name}
+                        </span>
+                        <div className="text-[10px] text-slate-500 font-mono">Inward & Barcode Audit</div>
+                      </div>
+
+                      {/* Step 3: Central Sorting / Linehaul */}
+                      <div className="bg-purple-50 p-4 rounded-2xl border-2 border-purple-300 text-center space-y-1 shadow-sm">
+                        <span className="text-[10px] font-bold text-purple-700 uppercase block">3. Linehaul Trunk Route</span>
+                        <div className="font-black text-sm text-purple-950 font-mono">[TEJ-SORT-01]</div>
+                        <span className="text-[11px] text-purple-900 font-bold block truncate">
+                          Tejgaon Central Consolidation
+                        </span>
+                        <div className="text-[10px] text-purple-700 font-semibold font-mono">
+                          {totalDist} km • Covered Van
+                        </div>
+                      </div>
+
+                      {/* Step 4: Last-Mile Hub */}
+                      <div className={`p-4 rounded-2xl border-2 text-center space-y-1 shadow-sm ${
+                        deliveryIsOut ? 'bg-amber-50 border-amber-400' : 'bg-sky-50 border-sky-400'
+                      }`}>
+                        <span className="text-[10px] font-bold uppercase block text-slate-600">
+                          {deliveryIsOut ? '4. Nearest Last-Mile Hub' : '4. Destination Hub'}
+                        </span>
+                        <div className="font-black text-sm text-slate-900 font-mono">
+                          [{deliveryResult.hubAssign?.hub.code}]
+                        </div>
+                        <span className="text-[11px] font-bold text-slate-700 block truncate">
+                          {deliveryResult.hubAssign?.hub.name}
+                        </span>
+                        <div className="text-[10px] text-slate-500 font-mono">De-bag & Route Sort</div>
+                      </div>
+
+                      {/* Step 5: Final Delivery */}
+                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-center space-y-1">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase block">5. Final Handover</span>
+                        <div className="font-black text-xs text-slate-800 truncate" title={deliveryHierarchy.area}>
+                          {deliveryHierarchy.subArea ? `${deliveryHierarchy.area} (${deliveryHierarchy.subArea})` : deliveryHierarchy.area}
+                        </div>
+                        <p className="text-[10px] text-slate-500 truncate">{deliveryHierarchy.road || 'Doorstep Delivery'}</p>
+                        <span className={`text-[10px] font-bold block mt-1 py-0.5 px-2 rounded-full ${
+                          deliveryIsOut ? 'bg-amber-100 text-amber-800' : 'bg-sky-100 text-sky-800'
+                        }`}>
+                          {deliveryIsOut ? '📦 Feeder Drop-off' : '📦 Doorstep Delivery'}
+                        </span>
+                      </div>
+
+                    </div>
+
+                    {/* Financial Manifest Breakdown Table */}
+                    <div className="bg-slate-900 text-white rounded-2xl p-4 text-xs space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2">
+                        <span className="font-bold text-emerald-400 uppercase tracking-wider text-[11px]">
+                          Consignment Airway Bill (AWB) Financial Breakdown:
+                        </span>
+                        <span className="font-mono text-slate-400 text-[11px]">
+                          Booking Ref: NC-{Date.now().toString().slice(-6)}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-center">
+                        <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
+                          <span className="text-slate-400 block text-[10px]">Base Transit</span>
+                          <strong className="text-sm font-mono font-bold text-white">৳{baseCharge}</strong>
+                        </div>
+                        <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
+                          <span className="text-slate-400 block text-[10px]">Weight Surcharge</span>
+                          <strong className="text-sm font-mono font-bold text-white">৳{weightSurcharge}</strong>
+                        </div>
+                        <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
+                          <span className="text-slate-400 block text-[10px]">1st-Mile Feeder</span>
+                          <strong className={`text-sm font-mono font-bold ${pickupSurcharge > 0 ? 'text-amber-400' : 'text-slate-400'}`}>
+                            ৳{pickupSurcharge}
+                          </strong>
+                        </div>
+                        <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
+                          <span className="text-slate-400 block text-[10px]">Last-Mile Feeder</span>
+                          <strong className={`text-sm font-mono font-bold ${deliverySurcharge > 0 ? 'text-amber-400' : 'text-slate-400'}`}>
+                            ৳{deliverySurcharge}
+                          </strong>
+                        </div>
+                        <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
+                          <span className="text-slate-400 block text-[10px]">1% COD Fee</span>
+                          <strong className="text-sm font-mono font-bold text-white">৳{codFee}</strong>
+                        </div>
+                        <div className="bg-emerald-950/80 p-2.5 rounded-xl border border-emerald-500/60">
+                          <span className="text-emerald-400 block text-[10px] font-bold">Total Billable Fee</span>
+                          <strong className="text-base font-mono font-black text-emerald-300">৳{totalConsignmentFee}</strong>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800 text-slate-300 font-mono text-[11px]">
+                        <div>
+                          <span>COD to Collect: </span>
+                          <strong className="text-white">৳{codAmount}</strong>
+                          <span className="mx-2">|</span>
+                          <span>Net Merchant Settlement: </span>
+                          <strong className="text-emerald-400 font-bold">৳{netMerchantPayout}</strong>
+                        </div>
+                        <div className="text-slate-400">
+                          Pipeline: [{pickupResult.hubAssign?.hub.code}] ➔ TEJ-SORT-01 ➔ [{deliveryResult.hubAssign?.hub.code}]
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                )}
+
+                {/* Hub Network Directory */}
+                <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
+                  <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
+                    <h4 className="font-bold text-slate-900 text-sm">
+                      Nirapod Courier Operational Hub Directory ({COURIER_HUBS.length} Hubs Configured)
+                    </h4>
+                    <span className="text-xs text-slate-400">Primary Coverage & Fallback Network</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                    {COURIER_HUBS.map((h, idx) => (
+                      <div key={idx} className="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <strong className="text-slate-900 font-bold">{h.name}</strong>
+                          <span className="font-mono font-bold bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded text-[10px]">
+                            {h.code}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 leading-tight">📍 {h.address}</p>
+                        <div className="text-[10px] text-slate-600 bg-white p-1.5 rounded-lg border border-slate-100">
+                          Primary Zone: <strong>{h.coverageKeywords.slice(0, 4).join(', ')}...</strong>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+            ) : (
+              /* TAB 2: Single Coordinate Inspector */
+              <div className="space-y-6">
+                
+                {/* Top Control Bar: Coordinates & Presets */}
+                <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                    <div>
+                      <h2 className="font-extrabold text-slate-900 text-base tracking-tight">
+                        Single Coordinate & Locality Inspector
+                      </h2>
+                      <p className="text-xs text-slate-500">
+                        Input any GPS coordinates across Bangladesh, or pick dropdowns below to inspect reverse geocoding, operational hub fallback, and doorstep POI landmarks.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(`${inspLat}, ${inspLon}`);
+                          setCopiedInsp(true);
+                          setTimeout(() => setCopiedInsp(false), 2000);
+                        }}
+                        className="text-xs font-bold px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
+                      >
+                        {copiedInsp ? '✓ Coords Copied!' : '📋 Copy Coords'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Lat/Lon Inputs & Quick Test Presets */}
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                    <div className="md:col-span-3">
+                      <label className="text-xs font-bold text-slate-700 block mb-1">Latitude</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={inspLat}
+                        onChange={(e) => setInspLat(e.target.value)}
+                        className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl font-mono font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+                    <div className="md:col-span-3">
+                      <label className="text-xs font-bold text-slate-700 block mb-1">Longitude</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={inspLon}
+                        onChange={(e) => setInspLon(e.target.value)}
+                        className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl font-mono font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+
+                    {/* Presets Chips */}
+                    <div className="md:col-span-6 space-y-1">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase block">Quick Test Inspection Presets:</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {[
+                          { label: 'Mirpur-10 (Hope School)', lat: '23.80811', lon: '90.37306', area: 'Mirpur', subArea: 'Mirpur 10' },
+                          { label: 'Dhanmondi-27 (Rapa Plaza)', lat: '23.75380', lon: '90.37680', area: 'Dhanmondi', subArea: 'Dhanmondi 27 (Old)' },
+                          { label: 'Kaundia (Savar Rural)', lat: '23.80556', lon: '90.33889', area: 'Savar', subArea: 'Kaundia' },
+                          { label: 'Merul Badda (Dhaka)', lat: '23.76900', lon: '90.42600', area: 'Badda', subArea: 'Merul Badda' },
+                          { label: 'Uttara Sector 3', lat: '23.86930', lon: '90.39270', area: 'Uttara', subArea: 'Sector 3' },
+                          { label: 'Debidwar (Cumilla)', lat: '23.57970', lon: '90.99800', area: 'Debidwar', subArea: 'Debidwar Sadar' }
+                        ].map((p, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              setInspLat(p.lat);
+                              setInspLon(p.lon);
+                              setInspHierarchy(prev => ({ ...prev, area: p.area, subArea: p.subArea }));
+                            }}
+                            className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 border border-slate-200 transition"
+                          >
+                            📍 {p.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Main 2-Column Split: [L1-L5] on Left, [L6-L7] on Right */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                  
+                  {/* LEFT SIDE: Level 1 to Level 5 Dropdowns */}
+                  <div className="lg:col-span-6 bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                      <div>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                          Administrative & Locality Flow
+                        </span>
+                        <h3 className="font-extrabold text-slate-900 text-sm mt-1">
+                          [L1] to [L5] Hierarchy Dropdowns
+                        </h3>
+                      </div>
+                      <span className="text-[11px] text-slate-400">Cascading Auto-Sync</span>
+                    </div>
+
+                    {/* [L1] Division & [L2] District */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 block mb-1">
+                          <span className="text-emerald-700 font-extrabold mr-1">[L1]</span> Division:
+                        </label>
+                        <select
+                          value={inspHierarchy.division}
+                          onChange={(e) => updateInspectorHierarchy('division', e.target.value)}
+                          className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl font-semibold text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500"
+                        >
+                          {divisionList.map(d => (
+                            <option key={d} value={d}>{d}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 block mb-1">
+                          <span className="text-emerald-700 font-extrabold mr-1">[L2]</span> District:
+                        </label>
+                        <select
+                          value={inspHierarchy.district}
+                          onChange={(e) => updateInspectorHierarchy('district', e.target.value)}
+                          className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl font-semibold text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500"
+                        >
+                          {getDistrictsForDivision(inspHierarchy.division).map(d => (
+                            <option key={d} value={d}>{d}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* [L3-A] Upazila & [L3-B] Thana */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-slate-100">
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 block mb-1">
+                          <span className="text-emerald-700 font-extrabold mr-1">[L3-A]</span> Upazila (Rural):
+                        </label>
+                        <select
+                          value={inspHierarchy.upazila}
+                          onChange={(e) => updateInspectorHierarchy('upazila', e.target.value)}
+                          className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl font-semibold text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500"
+                        >
+                          <option value="">-- Optional / None --</option>
+                          {getUpazilasForDistrict(inspHierarchy.district).map(u => (
+                            <option key={u} value={u}>{u} Upazila</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 block mb-1">
+                          <span className="text-emerald-700 font-extrabold mr-1">[L3-B]</span> Thana (Metro):
+                        </label>
+                        <select
+                          value={inspHierarchy.thana}
+                          onChange={(e) => updateInspectorHierarchy('thana', e.target.value)}
+                          className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl font-semibold text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500"
+                        >
+                          <option value="">-- Optional / None --</option>
+                          {getThanasForDistrict(inspHierarchy.district).map(t => (
+                            <option key={t} value={t}>{t} Thana</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* [L3-C] Ward / Union */}
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">
+                        <span className="text-emerald-700 font-extrabold mr-1">[L3-C]</span> Ward / Union (4,540 Unions / 54 Wards):
+                      </label>
+                      <select
+                        value={inspHierarchy.wardUnion}
+                        onChange={(e) => updateInspectorHierarchy('wardUnion', e.target.value)}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl font-semibold text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500"
+                      >
+                        <option value="">-- Select Ward or Union --</option>
+                        {getWardsAndUnions(inspHierarchy.district, inspHierarchy.upazila, inspHierarchy.thana).map(w => (
+                          <option key={w} value={w}>{w}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* [L4] Area / Locality */}
+                    <div className="pt-1 border-t border-slate-100">
+                      <label className="text-xs font-bold text-slate-700 block mb-1">
+                        <span className="text-emerald-700 font-extrabold mr-1">[L4]</span> Area / Locality:
+                      </label>
+                      <select
+                        value={inspHierarchy.area}
+                        onChange={(e) => updateInspectorHierarchy('area', e.target.value)}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl font-semibold text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500"
+                      >
+                        {getAvailableAreas(inspHierarchy.district).map(a => (
+                          <option key={a} value={a}>{a}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* [L5] Sub-Area & Section (Dual Input) */}
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">
+                        <span className="text-emerald-700 font-extrabold mr-1">[L5]</span> Sub-Area & Sections (Dual Input):
+                      </label>
+                      
+                      <div className="space-y-2">
+                        {/* Companion Dropdown */}
+                        <select
+                          value={inspHierarchy.subArea}
+                          onChange={(e) => updateInspectorHierarchy('subArea', e.target.value)}
+                          className="w-full px-3 py-2 text-xs bg-emerald-50/60 border border-emerald-300 rounded-xl font-semibold text-emerald-950 focus:bg-white focus:ring-2 focus:ring-emerald-500"
+                        >
+                          <option value="">-- Quick Pick Known Sub-Area --</option>
+                          {getAvailableSubAreas(inspHierarchy.area, inspHierarchy.district).map(s => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+
+                        {/* Free Text Input with Datalist */}
+                        <div className="relative">
+                          <input
+                            type="text"
+                            list="insp-subarea-list"
+                            placeholder="Or type custom sub-area name..."
+                            value={inspHierarchy.subArea}
+                            onChange={(e) => updateInspectorHierarchy('subArea', e.target.value)}
+                            className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-xl font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                          />
+                          <datalist id="insp-subarea-list">
+                            {getAvailableSubAreas(inspHierarchy.area, inspHierarchy.district).map(s => (
+                              <option key={s} value={s} />
+                            ))}
+                          </datalist>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-[11px] text-slate-600 flex items-center justify-between">
+                      <span>💡 <strong>Live Coordinate Sync:</strong> Dropdown picks auto-calculate representative centroids.</span>
+                      <span className="font-mono text-emerald-700 font-bold">{inspLat}, {inspLon}</span>
+                    </div>
+
+                  </div>
+
+                  {/* RIGHT SIDE: Level 6 & Level 7 Under Selected Level 5 */}
+                  <div className="lg:col-span-6 space-y-4">
+                    
+                    {/* Level 6 & Level 7 Doorstep Card */}
+                    <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <div>
+                          <span className="text-[10px] font-black uppercase tracking-wider text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200">
+                            Doorstep Last-Mile Specifics
+                          </span>
+                          <h3 className="font-extrabold text-slate-900 text-sm mt-1">
+                            [L6] & [L7] Under Selected [L5]: <span className="text-emerald-700">{inspHierarchy.subArea || inspHierarchy.area}</span>
+                          </h3>
+                        </div>
+                        <span className="text-[11px] text-slate-400 font-mono">Precision Layer</span>
+                      </div>
+
+                      {/* [L6] Block / Sector / Section */}
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 block mb-1">
+                          <span className="text-teal-700 font-extrabold mr-1">[L6]</span> Block / Sector / Section:
+                        </label>
+                        
+                        {/* Quick Block Pills */}
+                        <div className="flex flex-wrap gap-1 mb-2">
+                          {['Block A', 'Block B', 'Block C', 'Block D', 'Section 1', 'Section 6', 'Section 10', 'Sector 3', 'Sector 4', 'Road 27'].map(blk => (
+                            <button
+                              key={blk}
+                              type="button"
+                              onClick={() => setInspHierarchy(prev => ({ ...prev, block: blk }))}
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-md border transition ${
+                                inspHierarchy.block === blk
+                                  ? 'bg-teal-600 text-white border-teal-600'
+                                  : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                              }`}
+                            >
+                              {blk}
+                            </button>
+                          ))}
+                        </div>
+
+                        <input
+                          type="text"
+                          placeholder="e.g. Block C, Section 10, or Sector 4"
+                          value={inspHierarchy.block}
+                          onChange={(e) => setInspHierarchy(prev => ({ ...prev, block: e.target.value }))}
+                          className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl font-medium text-slate-800 focus:bg-white focus:ring-2 focus:ring-teal-500"
+                        />
+                      </div>
+
+                      {/* [L7] Road / House / Landmark / Delivery Instruction */}
+                      <div className="pt-2 border-t border-slate-100">
+                        <label className="text-xs font-bold text-slate-700 block mb-1">
+                          <span className="text-teal-700 font-extrabold mr-1">[L7]</span> Road, House & POI Landmark (Delivery Instruction):
+                        </label>
+                        
+                        <input
+                          type="text"
+                          placeholder="e.g. Hope International School Road, House 12, Road 4"
+                          value={inspHierarchy.road}
+                          onChange={(e) => setInspHierarchy(prev => ({ ...prev, road: e.target.value }))}
+                          className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl font-medium text-slate-800 focus:bg-white focus:ring-2 focus:ring-teal-500"
+                        />
+
+                        {/* Live Filtered Nearby Landmarks Chips for [L7] */}
+                        {inspectorNearbyLandmarks.length > 0 && (
+                          <div className="mt-3 bg-teal-50/50 border border-teal-200/80 rounded-2xl p-3 space-y-1.5">
+                            <span className="text-[10px] font-bold text-teal-800 uppercase block">
+                              📍 Instant POI Landmarks in {inspHierarchy.subArea || inspHierarchy.area} (Click to Pin):
+                            </span>
+                            <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
+                              {inspectorNearbyLandmarks.map((lm, idx) => (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  onClick={() => {
+                                    setInspHierarchy(prev => ({ ...prev, road: lm.nameEn || lm.name }));
+                                    setInspLat(lm.lat.toFixed(5));
+                                    setInspLon(lm.lon.toFixed(5));
+                                  }}
+                                  className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-white hover:bg-teal-600 hover:text-white border border-teal-200 text-teal-900 transition flex items-center gap-1 shadow-2xs"
+                                >
+                                  <span>{lm.type === 'school' ? '🏫' : (lm.type === 'hospital' ? '🏥' : (lm.type === 'bank' ? '🏦' : '📍'))}</span>
+                                  <span className="truncate max-w-[170px]">{lm.nameEn || lm.name}</span>
+                                  <span className="text-[9px] opacity-75 font-mono">({lm.dist.toFixed(1)}km)</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                    </div>
+
+                    {/* Operational Hub Assignment & Reverse Geocoded Card */}
+                    {inspResult && (
+                      <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                          <h4 className="font-extrabold text-slate-900 text-xs uppercase tracking-wider">
+                            Operational Hub & Reverse Geocode Result
+                          </h4>
+                          <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase ${
+                            inspResult.hubAssign.isOutOfZone ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                          }`}>
+                            {inspResult.hubAssign.isOutOfZone ? '⚠️ Out-of-Zone Fallback Hub' : '🟢 Primary Coverage Hub'}
+                          </span>
+                        </div>
+
+                        {/* Hub Details Box */}
+                        <div className={`p-4 rounded-2xl border-2 space-y-1.5 ${
+                          inspResult.hubAssign.isOutOfZone
+                            ? 'bg-amber-50/90 border-amber-400 text-amber-950'
+                            : 'bg-emerald-50/90 border-emerald-400 text-emerald-950'
+                        }`}>
+                          <div className="flex items-center justify-between">
+                            <span className="text-base font-black">
+                              {inspResult.hubAssign.hub.name} [{inspResult.hubAssign.hub.code}]
+                            </span>
+                            <span className="text-xs font-mono font-bold bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                              {inspResult.hubAssign.distanceKm} km away
+                            </span>
+                          </div>
+                          <p className="text-xs font-medium opacity-90">📍 Hub Address: {inspResult.hubAssign.hub.address}</p>
+                          <p className="text-[11px] font-mono opacity-80">Assignment Rule: {inspResult.hubAssign.rule}</p>
+                        </div>
+
+                        {/* Full Address */}
+                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-1.5 text-xs">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Resolved Complete Address:</span>
+                          <div className="text-sm font-bold text-slate-900 leading-snug">
+                            {inspResult.loc.humanReadableAddressEn}
+                          </div>
+                          <div className="text-xs font-semibold text-emerald-700 bangla-text">
+                            {inspResult.loc.humanReadableAddressBn}
+                          </div>
+                        </div>
+
+                      </div>
+                    )}
+
+                  </div>
+
+                </div>
+
+              </div>
+            )}
+</main>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
